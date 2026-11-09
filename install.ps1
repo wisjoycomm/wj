@@ -81,7 +81,7 @@ namespace Wisjoy {
     if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$dir;$env:Path" }
 }
 Write-Host "Installed $($release.tag_name): $dest (SHA-256 verified)"
-Write-Host "Run wj locally to manage apps, tools and logins. Use wj update only when you want a new release."
+Write-Host "Installed. Open a new terminal and run: wj   (add -RunSetup to the installer to open it right away). Use wj update only when you want a new release."
 if ($RunSetup) {
     & $dest
     if ($LASTEXITCODE -ne 0) { throw "Setup exited with code $LASTEXITCODE. Run the installed tool again to retry." }

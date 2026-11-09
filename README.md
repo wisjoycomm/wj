@@ -13,11 +13,11 @@ Vietnamese instructions: [HUONG-DAN.md](HUONG-DAN.md). Short guides for each par
 
 ## Start on a new Windows machine
 
-Open **CMD** and paste this single command. It downloads and verifies the release,
-installs it into your user PATH, then opens the setup menu immediately:
+Open **CMD** and paste this single command. It downloads and verifies the release
+and installs it into your user PATH. It does not open anything: run `wj` when you want it.
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1'))) -RunSetup"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1')))"
 ```
 
 No manual download or extraction is needed. You can also run `install.cmd` from
@@ -51,10 +51,10 @@ have separate prompts. A new-machine setup does not require installing every gro
 To install the CLI into your user PATH from a published release:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1'))) -RunSetup
+& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1')))
 ```
 
-Or download `install.ps1` and run `./install.ps1 -RunSetup`. Use `-Version vX.Y.Z`
+Or download `install.ps1` and run `./install.ps1`. Add `-RunSetup` to open the menu straight after installing. Use `-Version vX.Y.Z`
 to select a release. `-InstallDir PATH -NoPath` installs into a selected directory
 without modifying PATH. The installer detects Windows x64/ARM64, verifies SHA-256,
 and makes the command available in the current and future terminals.

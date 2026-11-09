@@ -52,5 +52,5 @@ case ":$PATH:" in
     *":$dir:"*) ;;
     *) echo "Add to your shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
-echo "Run wj to choose OAuth token, API key, custom gateway, or browser login."
+echo "Installed. Run wj when you want it (add --run to open it right away): OAuth token, API key, custom gateway or browser login."
 if [ "$run_setup" -eq 1 ]; then "$dir/wj" < /dev/tty; fi

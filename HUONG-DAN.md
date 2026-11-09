@@ -21,10 +21,10 @@ Ban tai mot file executable, khong can cai Go hay Node de mo tool.
 Mo **CMD**, dan mot lenh nay:
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1'))) -RunSetup"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1')))"
 ```
 
-Tool tu tai ban release, kiem tra SHA-256, cai vao PATH va mo menu ngay.
+Tool tu tai ban release, kiem tra SHA-256 va cai vao PATH. Cai xong KHONG tu mo: ai can thi go `wj` (muon mo ngay thi them `-RunSetup` vao cuoi lenh).
 Khong can tu tai ZIP hay giai nen. Lan sau mo CMD moi va go `wj`.
 Neu CMD/Windows Terminal dang mo tu truoc, dong han va mo lai de nhan PATH moi.
 
@@ -160,7 +160,7 @@ hoac Codex da cai/cau hinh; khong co key gateway dung chung rieng cho Orca.
 Sau khi ban moi da duoc phat hanh, mo PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1'))) -RunSetup
+& ([scriptblock]::Create((irm 'https://github.com/wisjoycomm/wj/releases/latest/download/install.ps1')))
 ```
 
 Installer tu chon ban Windows x64/ARM64 va kiem tra SHA-256.
