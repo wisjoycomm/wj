@@ -158,13 +158,37 @@ func TestRenderTopMarksActiveProjectsFirst(t *testing.T) {
 		claudeLine("a", "/w/big-old", now.Add(-3*time.Hour).Format(time.RFC3339), 5_000_000, 0, 0, 0)+
 			claudeLine("b", "/w/small-new", now.Add(-10*time.Second).Format(time.RFC3339), 900, 0, 0, 0))
 	s.scan(time.Time{})
-	list, total := s.projectStatus(time.Time{})
-	out := renderTop(list, total, "trong 24h", now, 0, 0)
+	out := renderTop(s.topReport(time.Time{}), "trong 24h", now, 0, 0)
 	if strings.Index(out, "small-new") > strings.Index(out, "big-old") {
 		t.Errorf("order:\n%s", out)
 	}
 	if !strings.Contains(out, "● small-new") || strings.Contains(out, "● big-old") || !strings.Contains(out, "5.0M") {
 		t.Errorf("render:\n%s", out)
+	}
+}
+
+func TestRenderTopShowsModelsCacheCostAndOpenSessions(t *testing.T) {
+	now := time.Now()
+	row := func(project, model string, read, write int64) usageRow {
+		return usageRow{usageTotal: usageTotal{Project: project, Model: model, Calls: 1, CacheRead: read, CacheWrite: write, Total: read + write},
+			Apps: []string{"claude"}, LastModel: model, Last: now.Add(-time.Hour), Cost: 1.5}
+	}
+	game := row("game", "", 3000, 4000)
+	report := topReport{
+		list:   []usageRow{game},
+		total:  game,
+		models: map[string][]usageRow{"game": {row("game", "model-big", 3000, 0), row("game", "model-small", 0, 4000)}},
+		open:   []string{"game", "idle"},
+	}
+	wide := renderTop(report, "trong 24h", now, 0, 0)
+	for _, want := range []string{"ĐỌC CACHE", "GHI CACHE", "≈USD", "$1.50", "2 model", "└", "model-small", "○ game", "○ idle", "đang mở"} {
+		if !strings.Contains(wide, want) {
+			t.Errorf("missing %q:\n%s", want, wide)
+		}
+	}
+	narrow := renderTop(report, "trong 24h", now, 70, 0)
+	if widestLine(narrow) >= 70 || strings.Contains(narrow, "GHI CACHE") || !strings.Contains(narrow, "└ model-small") {
+		t.Errorf("narrow:\n%s", narrow)
 	}
 }
 
@@ -348,13 +372,13 @@ func TestSummarizeSplitsOneHourCacheAndModels(t *testing.T) {
 	}
 }
 
-func TestOverlayDetailEntriesListModelsWithinTheCap(t *testing.T) {
+func TestDetailEntriesListModelsWithinTheCap(t *testing.T) {
 	named := func(name, model string) usageRow {
 		return usageRow{usageTotal: usageTotal{Project: name, Model: model}}
 	}
 	rows := []usageRow{named("a", ""), named("b", ""), named("c", "")}
 	models := map[string][]usageRow{"a": {named("a", "x"), named("a", "y")}, "b": {named("b", "x")}}
-	got := overlayDetailEntries(rows, models)
+	got := detailEntries(rows, models, overlayMaxLines)
 	if len(got) != 5 || got[0].Models != 2 || !got[1].Sub || got[2].Model != "y" || got[3].Project != "b" || got[3].Sub {
 		t.Errorf("entries = %+v", got)
 	}
@@ -366,7 +390,7 @@ func TestOverlayDetailEntriesListModelsWithinTheCap(t *testing.T) {
 		many = append(many, named(name, ""))
 		lots[name] = []usageRow{named(name, "x"), named(name, "y")}
 	}
-	got = overlayDetailEntries(many, lots)
+	got = detailEntries(many, lots, overlayMaxLines)
 	projects := 0
 	for _, entry := range got {
 		if !entry.Sub {

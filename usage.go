@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -646,11 +647,14 @@ func (s *sessionScanner) modelsByProject(since time.Time) map[string][]usageRow 
 	return models
 }
 
-// overlayDetailEntries adds a line per model under each project that used several.
-// Every project keeps its line; the model lines stop at overlayMaxLines so the window
-// still fits a screen, and such a project just says how many models it used.
-func overlayDetailEntries(rows []usageRow, models map[string][]usageRow) []overlayDetailEntry {
-	spare := overlayMaxLines - len(rows)
+// detailEntries adds a line per model under each project that used several.
+// Every project keeps its line; the model lines stop at maxLines (0 = no limit) so the
+// report still fits a screen, and such a project just says how many models it used.
+func detailEntries(rows []usageRow, models map[string][]usageRow, maxLines int) []overlayDetailEntry {
+	spare := maxLines - len(rows)
+	if maxLines <= 0 {
+		spare = math.MaxInt
+	}
 	entries := make([]overlayDetailEntry, 0, len(rows))
 	for _, row := range rows {
 		used := models[row.Project]
@@ -676,40 +680,172 @@ func shortWindow(d time.Duration) string {
 	return d.String()
 }
 
-func renderTop(list []usageRow, total usageRow, label string, now time.Time, width, height int) string {
+// topReport is everything one frame of wj top shows.
+type topReport struct {
+	list   []usageRow            // projects in the window, newest first
+	total  usageRow              // the whole window
+	models map[string][]usageRow // each project's usage per model, biggest first
+	apps   []usageRow            // the whole window per app
+	open   []string              // projects with an open Claude Code session
+}
+
+func (s *sessionScanner) topReport(since time.Time) topReport {
+	list, total := s.projectStatus(since)
+	apps, _ := s.summarize(usageFilter{Since: since, GroupBy: []string{"client"}})
+	return topReport{list: list, total: total, models: s.modelsByProject(since), apps: apps, open: s.openClaudeProjects()}
+}
+
+// topLayout is how much a terminal width can hold: the model column, and the cache
+// split into read and write.
+type topLayout struct{ model, splitCache bool }
+
+// topLinesAround counts the lines of a frame that are not project rows.
+const topLinesAround = 12
+
+// renderTop shows the same report as the expanded overlay, plus calls and the cache
+// split, and picks the widest layout that fits the terminal (width 0 = any).
+func renderTop(r topReport, label string, now time.Time, width, height int) string {
+	rows := append([]usageRow{}, r.list...)
+	for _, name := range r.open {
+		seen := false
+		for _, row := range rows {
+			seen = seen || row.Project == name
+		}
+		if !seen {
+			rows = append(rows, usageRow{usageTotal: usageTotal{Project: name}, Apps: []string{"claude"}})
+		}
+	}
+	budget := 0
+	if height > 0 {
+		budget = max(height-topLinesAround, 1)
+	}
+	hidden := 0
+	if budget > 0 && len(rows) > budget {
+		hidden = len(rows) - budget
+		rows = rows[:budget]
+	}
+	entries := detailEntries(rows, r.models, budget)
+
+	var out string
+	for _, layout := range []topLayout{{true, true}, {true, false}, {false, false}} {
+		out = renderTopTable(r, entries, layout, label, now, hidden)
+		if width == 0 || widestLine(out) < width {
+			break
+		}
+	}
+	return out
+}
+
+func widestLine(text string) int {
+	widest := 0
+	for _, line := range strings.Split(text, "\n") {
+		widest = max(widest, len([]rune(line)))
+	}
+	return widest
+}
+
+func renderTopTable(r topReport, entries []overlayDetailEntry, layout topLayout, label string, now time.Time, hidden int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "wj top - token theo project, %s (%s)\n\n", label, now.Format("15:04:05"))
-	if total.Calls == 0 {
+	if len(entries) == 0 {
 		b.WriteString("Chưa có lượt gọi nào trong khoảng này.\n")
 		return b.String()
 	}
-	showModel := width == 0 || width >= 100
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	model := func(text string) string {
-		if showModel {
-			return text + "\t"
+	var table strings.Builder
+	w := tabwriter.NewWriter(&table, 0, 0, 2, ' ', tabwriter.AlignRight)
+	// The first columns read left to right, so they are padded by hand.
+	head := []string{"  PROJECT", "APP", "LẦN CUỐI"}
+	if layout.model {
+		head = append(head, "MODEL")
+	}
+	head = append(head, "LƯỢT", "VÀO", "RA")
+	if layout.splitCache {
+		head = append(head, "ĐỌC CACHE", "GHI CACHE")
+	} else {
+		head = append(head, "CACHE")
+	}
+	head = append(head, "TỔNG", "≈USD")
+	texts := 3
+	if layout.model {
+		texts = 4
+	}
+	widths := make([]int, texts)
+	var lines [][]string
+	add := func(cells []string) {
+		for i := range texts {
+			widths[i] = max(widths[i], len([]rune(cells[i])))
 		}
-		return ""
+		lines = append(lines, cells)
 	}
-	fmt.Fprintf(w, "  PROJECT\tAPP\t%sLẦN CUỐI\t%6s\t%7s\t%7s\t%7s\t%7s\n", model("MODEL"), "LƯỢT", "VÀO", "RA", "CACHE", "TỔNG")
-	shown := list
-	if height > 8 && len(shown) > height-8 {
-		shown = shown[:height-8]
-	}
-	for _, t := range shown {
-		mark := " "
-		if now.Sub(t.Last) < activeWindow {
-			mark = "●"
+	numbers := func(row usageRow) []string {
+		cells := []string{fmt.Sprint(row.Calls), compactTokens(row.Input), compactTokens(row.Output)}
+		if layout.splitCache {
+			cells = append(cells, compactTokens(row.CacheRead), compactTokens(row.CacheWrite))
+		} else {
+			cells = append(cells, compactTokens(row.CacheRead+row.CacheWrite))
 		}
-		fmt.Fprintf(w, "%s %s\t%s\t%s%s\t%6d\t%7s\t%7s\t%7s\t%7s\n", mark, cutRunes(t.Project, 24), strings.Join(t.Apps, ","),
-			model(cutRunes(t.LastModel, 26)), agoText(now.Sub(t.Last)), t.Calls, compactTokens(t.Input), compactTokens(t.Output),
-			compactTokens(t.CacheRead+t.CacheWrite), compactTokens(t.Total))
+		return append(cells, compactTokens(row.Total), costText(row))
 	}
-	fmt.Fprintf(w, "  TỔNG\t\t%s\t%6d\t%7s\t%7s\t%7s\t%7s\n", model(""), total.Calls, compactTokens(total.Input), compactTokens(total.Output),
-		compactTokens(total.CacheRead+total.CacheWrite), compactTokens(total.Total))
+	add(append([]string{}, head...))
+	for _, e := range entries {
+		ago := "đang mở"
+		if !e.Last.IsZero() {
+			ago = agoText(now.Sub(e.Last))
+		}
+		var cells []string
+		if e.Sub {
+			name := "  └"
+			if !layout.model {
+				name = "  └ " + cutRunes(e.Model, 22)
+			}
+			cells = []string{name, strings.Join(e.Apps, ","), ago}
+			if layout.model {
+				cells = append(cells, cutRunes(e.Model, 26))
+			}
+		} else {
+			mark := " "
+			switch {
+			case !e.Last.IsZero() && now.Sub(e.Last) < activeWindow:
+				mark = "●"
+			case containsName(r.open, e.Project):
+				mark = "○"
+			}
+			cells = []string{mark + " " + cutRunes(e.Project, 24), strings.Join(e.Apps, ","), ago}
+			if layout.model {
+				model := cutRunes(e.LastModel, 26)
+				if e.Models > 1 {
+					model = fmt.Sprintf("%d model", e.Models)
+				}
+				cells = append(cells, model)
+			}
+		}
+		add(append(cells, numbers(e.usageRow)...))
+	}
+	total := []string{"  TỔNG", "", ""}
+	if layout.model {
+		total = append(total, "")
+	}
+	add(append(total, numbers(r.total)...))
+	for _, cells := range lines {
+		for j := range texts {
+			cells[j] += strings.Repeat(" ", widths[j]-len([]rune(cells[j])))
+		}
+		fmt.Fprintf(w, "%s\t\n", strings.Join(cells, "\t"))
+	}
 	_ = w.Flush()
-	if len(shown) < len(list) {
-		fmt.Fprintf(&b, "  ...và %d project khác\n", len(list)-len(shown))
+	// AlignRight also pads the first column on the left; drop that indent.
+	for _, line := range strings.SplitAfter(table.String(), "\n") {
+		b.WriteString(strings.TrimPrefix(line, "  "))
+	}
+	if hidden > 0 {
+		fmt.Fprintf(&b, "  ...và %d project khác (xem đủ: wj usage)\n", hidden)
+	}
+	if len(r.apps) > 1 {
+		parts := make([]string, 0, len(r.apps))
+		for _, app := range r.apps {
+			parts = append(parts, fmt.Sprintf("%s %s %s", app.Client, compactTokens(app.Total), costText(app)))
+		}
+		fmt.Fprintf(&b, "\nTheo app: %s\n", strings.Join(parts, " · "))
 	}
 	return b.String()
 }
@@ -738,8 +874,9 @@ func runTop(args []string, out io.Writer) error {
 	frame := func(width, height int) string {
 		now := time.Now()
 		scanner.scan(time.Time{})
-		list, total := scanner.projectStatus(now.Add(-*window))
-		return renderTop(list, total, label, now, width, height) + "\n" + scanner.machineTotals(now) + "\n"
+		report := scanner.topReport(now.Add(-*window))
+		return renderTop(report, label, now, width, height) + "\n" + scanner.machineTotals(now) + "\n" +
+			fmt.Sprintf("≈USD = nếu trả theo giá API niêm yết ngày %s, không phải số tiền thật. Đủ mọi model: wj usage -by project-model\n", pricesAsOf)
 	}
 	stdout, isFile := out.(*os.File)
 	if *once || !isFile || !term.IsTerminal(int(stdout.Fd())) {
@@ -758,7 +895,7 @@ func runTop(args []string, out io.Writer) error {
 		if err != nil {
 			width, height = 0, 0
 		}
-		lines := strings.Split(frame(width, height)+"\nCtrl+C để thoát. ● = vừa chạy trong 2 phút.\n", "\n")
+		lines := strings.Split(frame(width, height)+"\nCtrl+C để thoát. ● = dùng token trong 2 phút, ○ = phiên Claude Code đang mở.\n", "\n")
 		for i, line := range lines {
 			if width > 0 {
 				lines[i] = cutRunes(line, width-1)

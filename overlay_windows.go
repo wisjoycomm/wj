@@ -327,7 +327,7 @@ func overlayFeed(window time.Duration, home string, hwnd uintptr) {
 			lines = append(lines, overlayLine{Project: cutRunes(row.Project, 18), Tokens: compactTokens(row.Total), Active: now.Sub(row.Last) < activeWindow})
 		}
 		var detail []overlayLine
-		for _, entry := range overlayDetailEntries(overlayDetailRows(running, list), scanner.modelsByProject(since)) {
+		for _, entry := range detailEntries(overlayDetailRows(running, list), scanner.modelsByProject(since), overlayMaxLines) {
 			detail = append(detail, overlayDetailLine(entry, now))
 		}
 		whole := scanner.machineTotals(now)

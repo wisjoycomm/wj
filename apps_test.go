@@ -173,10 +173,10 @@ func TestMenuReachesTokenTable(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	t.Setenv("CODEX_HOME", t.TempDir())
 	var out bytes.Buffer
-	if err := mainMenu(strings.NewReader("3\n1\n0\n"), &out); err != nil {
+	if err := mainMenu(strings.NewReader("3\n1\n1\n0\n0\n0\n"), &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Cả máy") {
+	if !strings.Contains(out.String(), "Cả máy") || !strings.Contains(out.String(), "wj overlay") {
 		t.Errorf("out:\n%s", out.String())
 	}
 }

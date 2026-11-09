@@ -18,6 +18,26 @@ wj usage -project game -app codex
 
 `-since 168h` đổi khoảng thời gian (mặc định 24 giờ). `wj usage -all` lấy toàn bộ.
 
+Trong menu `wj`: AI Agent → Xem token, có đủ `wj top`, mở/đóng overlay và `wj usage`.
+
+## wj top
+
+Cùng báo cáo với overlay mở rộng, thêm số lượt và cache tách đọc/ghi:
+
+```text
+  PROJECT            APP     LẦN CUỐI  MODEL              LƯỢT   VÀO      RA  ĐỌC CACHE  GHI CACHE   TỔNG    ≈USD
+● endlesswinter      claude  vừa xong  2 model             444   906  193.5k      49.3M     609.0k  50.1M   $9.11
+  └                  claude  vừa xong  claude-sonnet-5-5   413   830  175.5k      47.2M     550.3k  47.9M   $7.85
+  └                  claude  2 phút    claude-opus-5-5      31    76   18.0k       2.1M      58.7k   2.2M   $1.26
+○ game               claude  đang mở                         0     0       0          0          0      0      $0
+```
+
+- `●` dùng token trong 2 phút, `○` có phiên Claude Code đang mở (kể cả chưa dùng token).
+- Project dùng nhiều model có thêm một dòng `└` cho mỗi model.
+- Terminal hẹp thì gộp cache thành một cột, hẹp nữa thì bỏ cột MODEL (model ghi sau `└`).
+  Terminal thấp thì bớt dòng, ghi `...và N project khác`.
+- Dùng nhiều app (Claude, Codex) thì có thêm dòng `Theo app`.
+
 ## Tổng cả máy
 
 `wj top` có dòng tổng mọi project:
@@ -75,7 +95,7 @@ Windows; macOS và Linux dùng `wj top` trong một cửa sổ terminal nhỏ.
 
 ## Quy đổi tiền
 
-Chỉ có trong `wj usage` và overlay mở rộng, không có ở `wj top` hay overlay thu gọn.
+Có trong `wj usage`, `wj top` và overlay mở rộng, không có ở overlay thu gọn.
 
 Đây là phép quy đổi, không phải số tiền thật phải trả: gói Pro/Max là phí cố định, còn gateway
 có giá riêng. Dùng để so sánh project và model với nhau.
