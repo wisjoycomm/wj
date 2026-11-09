@@ -47,7 +47,7 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 	case "init":
 		return runInit(args[1:], input, out)
 	case "usage":
-		return runUsage(args[1:], out)
+		return runUsage(args[1:], input, out)
 	case "top":
 		return runTop(args[1:], out)
 	case "overlay":
@@ -163,8 +163,9 @@ func tokenMenu(input io.Reader, out io.Writer) error {
 		{"Bảng trực tiếp mọi project, theo model, cache và ≈USD (wj top)", func() error { return runTop(nil, out) }},
 		{"Overlay luôn nổi trên màn hình (wj overlay)", func() error { return runApp([]string{"overlay"}, input, out) }},
 		{"Đóng overlay (wj overlay stop)", func() error { return runApp([]string{"overlay", "stop"}, input, out) }},
-		{"Bảng chi tiết 30 ngày, từng model trong mỗi project (wj usage)", func() error {
-			return runUsage([]string{"-since", "720h", "-by", "project-model"}, out)
+		{"Theo ngày/tuần/tháng, từng session và worker tốn bao nhiêu, gõ lệnh để đổi kỳ (wj usage)", func() error { return runUsage(nil, input, out) }},
+		{"Bảng chi tiết 30 ngày, từng model trong mỗi project", func() error {
+			return runUsage([]string{"-since", "720h", "-by", "project-model"}, input, out)
 		}},
 	}, input, out)
 }

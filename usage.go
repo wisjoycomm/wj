@@ -39,6 +39,13 @@ type sessionCall struct {
 	Project, App, Model                  string
 	Input, Output, CacheRead, CacheWrite int64
 	CacheWrite1h                         int64 // the part of CacheWrite kept for an hour, which costs more
+	// Session is the session id. A subagent's own file belongs to the session that
+	// started it; Sub only marks that the call was recorded in such a file.
+	Session string
+	Sub     bool
+	Agent   string // the subagent's own id when Sub is set
+	// Context is the prompt size of this call; every call reads it again.
+	Context int64
 }
 
 type sessionFile struct {
@@ -54,6 +61,14 @@ type sessionScanner struct {
 	index               map[string]int
 	calls               []sessionCall
 	projects            map[string]string
+	titles              map[string]string    // session id -> the title Claude Code gave the chat
+	agents              map[string]agentMeta // session id + "/" + agent id -> what the subagent was asked to do
+}
+
+// agentMeta is what Claude Code writes next to a subagent's transcript.
+type agentMeta struct {
+	Type        string `json:"agentType"`
+	Description string `json:"description"`
 }
 
 func newSessionScanner(home string) *sessionScanner {
@@ -67,6 +82,8 @@ func newSessionScanner(home string) *sessionScanner {
 		files:     map[string]*sessionFile{},
 		index:     map[string]int{},
 		projects:  map[string]string{},
+		titles:    map[string]string{},
+		agents:    map[string]agentMeta{},
 	}
 }
 
@@ -134,6 +151,15 @@ func (s *sessionScanner) record(key string, call sessionCall) {
 }
 
 func (s *sessionScanner) readClaudeLine(path string, state *sessionFile, raw []byte) {
+	if bytes.Contains(raw, []byte(`"type":"ai-title"`)) {
+		var title struct {
+			Title string `json:"aiTitle"`
+		}
+		if id, sub := sessionOf(path); !sub && json.Unmarshal(raw, &title) == nil && title.Title != "" {
+			s.titles[id] = title.Title
+		}
+		return
+	}
 	if !bytes.Contains(raw, []byte(`"usage"`)) {
 		return
 	}
@@ -174,11 +200,50 @@ func (s *sessionScanner) readClaudeLine(path string, state *sessionFile, raw []b
 	if key == "" {
 		key = path + "\x00" + line.UUID
 	}
+	id, sub := sessionOf(path)
+	agent := ""
+	if sub {
+		agent = agentOf(path)
+		if _, ok := s.agents[id+"/"+agent]; !ok {
+			s.agents[id+"/"+agent] = readAgentMeta(path)
+		}
+	}
 	s.record("claude\x00"+key, sessionCall{
 		When: when, Project: s.projectOf(line.Cwd), App: "claude", Model: line.Message.Model,
 		Input: usage.Input, Output: usage.Output, CacheRead: usage.CacheRead, CacheWrite: usage.CacheWrite,
 		CacheWrite1h: usage.Creation.OneHour,
+		Session:      id, Sub: sub, Agent: agent, Context: usage.Input + usage.CacheRead + usage.CacheWrite,
 	})
+}
+
+// agentOf is the subagent id of a file under <session>/subagents/.
+func agentOf(path string) string {
+	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	return strings.TrimPrefix(name, "agent-")
+}
+
+// readAgentMeta reads agent-<id>.meta.json beside the transcript; a missing or
+// broken file just leaves the subagent without a description.
+func readAgentMeta(path string) agentMeta {
+	var meta agentMeta
+	if data, err := os.ReadFile(strings.TrimSuffix(path, filepath.Ext(path)) + ".meta.json"); err == nil {
+		_ = json.Unmarshal(data, &meta)
+	}
+	return meta
+}
+
+// sessionOf is the id of the session a transcript file belongs to, and whether the
+// file is a subagent's own (<session>/subagents/agent-*.jsonl).
+func sessionOf(path string) (string, bool) {
+	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	dir := filepath.Dir(path)
+	if filepath.Base(dir) == "subagents" {
+		return filepath.Base(filepath.Dir(dir)), true
+	}
+	if strings.HasPrefix(name, "rollout-") && len(name) > 36 { // Codex: rollout-<date>-<uuid>
+		name = name[len(name)-36:]
+	}
+	return name, false
 }
 
 type codexTokens struct {
@@ -227,7 +292,7 @@ func (s *sessionScanner) readCodexLine(path string, state *sessionFile, raw []by
 		// One record per response. A forked session copies old records, and the
 		// turn + response ids count each of them once.
 		state.hasRecords = true
-		s.record("codex\x00"+payload.TurnID+"\x00"+payload.ResponseID, s.codexCall(state, when, payload.Usage))
+		s.record("codex\x00"+payload.TurnID+"\x00"+payload.ResponseID, s.codexCall(path, state, when, payload.Usage))
 	case line.Type == "event_msg" && payload.Type == "token_count" && !state.hasRecords:
 		// Older Codex builds only write a running total.
 		total := payload.Info.Total
@@ -235,20 +300,22 @@ func (s *sessionScanner) readCodexLine(path string, state *sessionFile, raw []by
 			total.CacheWrite - state.lastTotal.CacheWrite, total.Output - state.lastTotal.Output}
 		if diff.Input > 0 || diff.Output > 0 {
 			state.lastTotal = total
-			s.record("codex\x00"+path+"\x00"+line.Timestamp, s.codexCall(state, when, diff))
+			s.record("codex\x00"+path+"\x00"+line.Timestamp, s.codexCall(path, state, when, diff))
 		}
 	}
 }
 
 // codexCall removes cached tokens from Codex's input so the columns mean the
 // same thing as Claude's, where cache tokens are never part of input.
-func (s *sessionScanner) codexCall(state *sessionFile, when time.Time, t codexTokens) sessionCall {
+func (s *sessionScanner) codexCall(path string, state *sessionFile, when time.Time, t codexTokens) sessionCall {
 	input := t.Input - t.Cached - t.CacheWrite
 	if input < 0 {
 		input = 0
 	}
+	id, _ := sessionOf(path)
 	return sessionCall{When: when, Project: s.projectOf(state.cwd), App: "codex", Model: state.model,
-		Input: input, Output: t.Output, CacheRead: t.Cached, CacheWrite: t.CacheWrite}
+		Input: input, Output: t.Output, CacheRead: t.Cached, CacheWrite: t.CacheWrite,
+		Session: id, Context: input + t.Cached + t.CacheWrite}
 }
 
 func (s *sessionScanner) projectOf(cwd string) string {
@@ -321,6 +388,25 @@ type usageRow struct {
 	Unpriced  int64   // tokens of models with no known price
 }
 
+// add counts one call into the row.
+func (t *usageRow) add(call sessionCall) {
+	cost, priced := callCost(call)
+	t.Cost += cost
+	if !priced {
+		t.Unpriced += call.Input + call.Output + call.CacheRead + call.CacheWrite
+	}
+	t.Calls++
+	t.Input += call.Input
+	t.Output += call.Output
+	t.CacheRead += call.CacheRead
+	t.CacheWrite += call.CacheWrite
+	t.Total += call.Input + call.Output + call.CacheRead + call.CacheWrite
+	t.Apps = appendUnique(t.Apps, call.App)
+	if !call.When.Before(t.Last) {
+		t.Last, t.LastModel = call.When, call.Model
+	}
+}
+
 func (s *sessionScanner) summarize(f usageFilter) ([]usageRow, usageRow) {
 	groups := map[string]*usageRow{}
 	var all usageRow
@@ -347,23 +433,8 @@ func (s *sessionScanner) summarize(f usageFilter) ([]usageRow, usageRow) {
 			g = &row
 			groups[key] = g
 		}
-		cost, priced := callCost(call)
-		for _, t := range []*usageRow{g, &all} {
-			t.Cost += cost
-			if !priced {
-				t.Unpriced += call.Input + call.Output + call.CacheRead + call.CacheWrite
-			}
-			t.Calls++
-			t.Input += call.Input
-			t.Output += call.Output
-			t.CacheRead += call.CacheRead
-			t.CacheWrite += call.CacheWrite
-			t.Total += call.Input + call.Output + call.CacheRead + call.CacheWrite
-			t.Apps = appendUnique(t.Apps, call.App)
-			if !call.When.Before(t.Last) {
-				t.Last, t.LastModel = call.When, call.Model
-			}
-		}
+		g.add(call)
+		all.add(call)
 	}
 	list := make([]usageRow, 0, len(groups))
 	for _, g := range groups {
@@ -379,7 +450,7 @@ func (s *sessionScanner) summarize(f usageFilter) ([]usageRow, usageRow) {
 	return list, all
 }
 
-func runUsage(args []string, out io.Writer) error {
+func runUsage(args []string, input io.Reader, out io.Writer) error {
 	flags := flag.NewFlagSet("usage", flag.ContinueOnError)
 	flags.SetOutput(out)
 	window := flags.Duration("since", 24*time.Hour, "khoảng thời gian, ví dụ 1h, 24h, 168h (7 ngày)")
@@ -387,14 +458,45 @@ func runUsage(args []string, out io.Writer) error {
 	by := flags.String("by", "project-app", "gom theo: project, project-app, project-model, app (app + model), model")
 	project := flags.String("project", "", "chỉ tính một project")
 	client := flags.String("app", "", "chỉ tính một app: claude, codex")
-	if err := flags.Parse(args); err != nil {
+	top := flags.Int("top", -1, "số session liệt kê khi xem theo ngày/tuần/tháng (0 = tất cả; mặc định 20, một ngày thì tất cả)")
+	agents := flags.Bool("agents", false, "liệt kê từng worker (subagent) dưới session của nó, khi xem theo ngày/tuần/tháng")
+	// A period (today, week, 2026-11-09...) may come before or after the flags.
+	period, rest := "", args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		period, rest = args[0], args[1:]
+	}
+	if err := flags.Parse(rest); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
-	if flags.NArg() != 0 {
-		return errors.New("cách dùng: wj usage [-since 24h | -all] [-by project|project-app|project-model|app|model] [-project TÊN] [-app claude|codex]")
+	if period == "" && flags.NArg() == 1 {
+		period = flags.Arg(0)
+	} else if flags.NArg() != 0 {
+		return errPeriodUsage
+	}
+	// No period and no other option: the report with a prompt below it. A period or
+	// any option keeps the plain output that scripts rely on.
+	if period == "" && flags.NFlag() == 0 {
+		period = "today"
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		return runUsageShell(input, out, home, usageView{Spec: period, Top: -1, Overview: true})
+	}
+	if period != "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		text, err := reportText(newSessionScanner(home), usageView{Spec: period, Project: *project, Client: *client, Top: *top, Agents: *agents}, time.Now(), 0, time.Time{})
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(out, text)
+		return err
 	}
 	groupBy, ok := map[string][]string{
 		"app":           {"client", "model"},

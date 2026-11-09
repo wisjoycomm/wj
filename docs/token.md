@@ -10,15 +10,150 @@ wj top                    bảng trực tiếp, project vừa chạy lên đầu
 wj top -once              in một lần
 wj overlay                cửa sổ nhỏ luôn nổi trên màn hình
 wj overlay stop           đóng overlay
-wj usage                  bảng chi tiết theo project + app
+wj usage                  báo cáo hôm nay, dòng gõ lệnh ở dưới để đổi kỳ/bộ lọc (xem "Xem theo ngày")
+wj usage week             in một lần rồi thoát (cho script); còn lastweek, month, 2026-11-09...
+wj usage -since 24h       bảng cũ theo project + app
 wj usage -by project-model   từng model trong mỗi project
 wj usage -by app          theo app + model; còn có -by project, -by model
 wj usage -project game -app codex
 ```
 
-`-since 168h` đổi khoảng thời gian (mặc định 24 giờ). `wj usage -all` lấy toàn bộ.
+`-since 168h` đổi khoảng thời gian của bảng cũ (mặc định 24 giờ). `wj usage -all` lấy toàn bộ.
 
 Trong menu `wj`: AI Agent → Xem token, có đủ `wj top`, mở/đóng overlay và `wj usage`.
+
+## Xem theo ngày, tuần, tháng
+
+Chỉ cần gõ `wj usage`. Phía trên là báo cáo, phía dưới là danh sách lệnh (dropdown) và dòng nhập `>`, giống
+menu `/` của Claude Code. Chọn lệnh nào thì báo cáo đổi theo lệnh đó ngay, không cần gõ lại cả lệnh.
+
+```text
+... báo cáo của kỳ đang xem ...
+Lệnh   ↑↓ chọn và xem ngay · Tab điền · Enter chốt · Esc huỷ
+  ● today      hôm nay  2026-11-10 T3                              4 session · 16.5M · $13.45
+    yesterday  hôm qua  2026-11-09 T2                              19 session · 737.6M · $398
+    week       tuần này  2026-11-09 → 2026-11-15                   19 session · 754.1M · $411
+    lastweek   tuần trước  2026-11-02 → 2026-11-08                 77 session · 7.7B · $3,211
+    month      tháng này  2026-11-01 → 2026-11-30                  95 session · 8.4B · $3,644
+    lastmonth  tháng trước  2026-10-01 → 2026-10-31                76 session · 5.2B · $5,707
+    agents     liệt kê từng worker (subagent) dưới session của nó
+    top        số session hiện ra (đang: tự vừa)
+▼ còn 5 dòng nữa, bấm ↓ để xem · gõ thêm để xem kỳ khác: 2026-11-05 · 2026-11 · 14d
+> 
+```
+
+| Phím | Tác dụng |
+|---|---|
+| `↑` `↓` | chọn lệnh trong danh sách. Báo cáo bên trên đổi sang kết quả của lệnh đó ngay (xem trước) |
+| `Enter` | chốt lệnh đang chọn. Lệnh có giá trị (`top`, `project`, `app`) thì mở danh sách giá trị của nó |
+| `Tab` | điền lệnh đang chọn vào dòng nhập |
+| gõ chữ | lọc danh sách, dòng đầu tự được chọn: gõ `la` còn `lastweek`, `lastmonth` |
+| `Esc` | bỏ xem trước; bấm tiếp thì xoá dòng nhập; bấm tiếp nữa thì thoát |
+| `PgUp` `PgDn` `Home` `End` | cuộn báo cáo khi dài hơn màn hình |
+| `Ctrl+U`, `Ctrl+C`, `q` | xoá dòng nhập, thoát, thoát |
+
+Dấu `●` là giá trị đang dùng, `›` là dòng đang chọn. Danh sách của `project` liệt kê đúng các project có dữ liệu trong
+kỳ đang xem, kèm dung lượng và ≈USD của từng project. Thoát xong, báo cáo cuối cùng được in ra màn hình thường
+để bạn kéo lên xem hoặc copy.
+
+Màn hình này cần terminal đủ lớn (từ 70 cột và 16 dòng). Nhỏ hơn hoặc terminal không hỗ trợ thì `wj usage` quay về
+kiểu gõ lệnh từng dòng như trước. Lần mở đầu tiên đọc cả tháng nên mất vài giây; mỗi lần bấm phím sau đó khoảng 0.1 giây.
+
+Đầu báo cáo có bảng **Các kỳ**: sáu kỳ cạnh nhau (hôm nay, hôm qua, tuần này, tuần trước, tháng này, tháng trước)
+với số session, lượt, token và ≈USD, kỳ đang xem đánh dấu `▶`. Bảng đi theo bộ lọc `project`/`app` đang chọn. Kỳ gõ
+tay (`2026-11-05`, `7d`...) tự thêm một dòng riêng.
+
+```text
+Các kỳ (gõ số hoặc tên kỳ để chuyển; ▶ là kỳ đang xem):
+   KỲ           TÊN          NGÀY                     SESSION   LƯỢT    TỔNG  QUY ĐỔI
+▶  1 today      hôm nay      2026-11-09 T2                 19   4982  731.8M     $396
+   2 yesterday  hôm qua      2026-11-08 CN                  -      -       -        -
+   3 week       tuần này     2026-11-09 → 2026-11-15       19   4982  731.8M     $396
+   4 lastweek   tuần trước   2026-11-02 → 2026-11-08       77  40658    7.7B   $3,211
+   5 month      tháng này    2026-11-01 → 2026-11-30       95  45809    8.4B   $3,628
+   6 lastmonth  tháng trước  2026-10-01 → 2026-10-31       76  31514    5.2B   $5,707
+```
+
+Bảng này chỉ có ở màn hình `wj usage` (không kỳ, không cờ). `wj usage week` và các lệnh có kỳ in một lần như cũ, không
+có bảng.
+
+| Gõ ở dòng `>` | Tác dụng |
+|---|---|
+| `1`–`6` | nhảy tới kỳ có số đó trong bảng "Các kỳ" |
+| `today`, `yesterday` | hôm nay, hôm qua |
+| `week`, `lastweek` | tuần này, tuần trước; tuần bắt đầu thứ Hai |
+| `month`, `lastmonth` | tháng này, tháng trước |
+| `7d`, `30d` | N ngày gần nhất, tính cả hôm nay |
+| `2026-11-09`, `2026-11` | một ngày, một tháng |
+| `2026-11-01..2026-11-09` | khoảng ngày bất kỳ (gồm cả hai đầu) |
+| `agents` / `agents off` | bật/tắt liệt kê từng worker dưới session của nó |
+| `top 30`, `top 0`, `top auto` | số session hiện ra (0 = tất cả, auto = vừa màn hình) |
+| `project TÊN`, `project all` | lọc theo project |
+| `app claude`, `app codex`, `app all` | lọc theo app |
+| `reset`, `help`, `q` | về mặc định, xem lệnh, thoát |
+
+Bảng dưới là các lệnh dùng được cả khi gõ tay ở dòng nhập (kể cả kiểu gõ từng dòng khi terminal nhỏ):
+
+
+Báo cáo chia theo ngày dương lịch của máy (không phải 24 giờ gần nhất). Nhiều ngày thì có bảng "Theo ngày"; một
+ngày thì chỉ liệt kê session. Số session hiện ra tự vừa màn hình, session nhỏ nhất bị ẩn và ghi "còn N session nhỏ
+hơn" (`top 0` để xem hết).
+
+Không có terminal (chạy qua pipe, trong script) hoặc có kỳ/cờ đi kèm thì `wj` in một lần rồi thoát, như cũ:
+
+```text
+wj usage lastweek -top 30 -agents -project game -app claude
+```
+
+Kỳ có thể đứng trước hoặc sau các cờ.
+
+Với `agents` (hoặc `-agents`), mỗi worker (subagent) là một dòng `└` ngay dưới session đã chạy nó, kèm mô tả việc
+Claude Code ghi lúc giao, model, số lượt, token, context lớn nhất và ≈USD. Mỗi session hiện tối đa 15 worker
+đắt nhất.
+
+
+```text
+SESSION       PROJECT            LƯỢT    VÀO      RA  ĐỌC CACHE  GHI CACHE    TỔNG    %    AGENT PHỤ  CTX MAX  QUY ĐỔI  MODEL          TIÊU ĐỀ
+e05f2e8a      endlesswinter       102   59.9k  233.5k      11.3M     732.8k   12.3M  35%    11.1M (2)   218.6k   $10.59  opus-5-5 +1    Task còn lại
+  └ af232f0d  general-purpose      60   31.0k  120.2k       5.0M     310.1k    5.5M  16%                191.1k    $4.96  opus-5-5       T4.6 scout/attack/plunder
+```
+
+Cuối báo cáo luôn có cây tổng hợp: tổng, rồi từng model, rồi từng project dùng model đó. Cây theo đúng kỳ và bộ lọc
+đang chọn; `cc/claude-opus-5-5` và `claude-opus-5-5` gộp làm một model.
+
+```text
+Tổng hợp theo model, rồi theo project:
+MODEL / PROJECT          LƯỢT     VÀO      RA  ĐỌC CACHE  GHI CACHE    TỔNG     %  QUY ĐỔI
+TỔNG                     4894  812.5k    7.2M     669.5M      36.0M  713.4M  100%     $387
+├─ opus-5-5              2883  480.1k    5.4M     406.5M      21.4M  433.9M   61%     $305
+│  ├─ endlesswinter      2259  466.2k    5.0M     289.4M      19.0M  313.8M   44%     $258
+│  └─ endless-winter-be   400     810  212.2k      79.4M     795.4k   80.4M   11%   $24.31
+└─ sonnet-5-5            1974  332.3k    1.8M     262.1M      14.2M  278.3M   39%   $81.60
+   └─ endlesswinter      1510  295.6k    1.2M     181.3M       9.7M  192.5M   27%   $55.70
+```
+
+Mỗi dòng session cho biết:
+
+- **SESSION:** 8 ký tự đầu của id phiên. Đối chiếu với tên file `~/.claude/projects/<project>/<id>.jsonl`.
+- **VÀO, RA, ĐỌC CACHE, GHI CACHE, TỔNG:** đủ từng loại token của session, giống bảng cây ở cuối báo cáo. TỔNG là cộng cả bốn.
+- **%:** phần của session trong cả kỳ.
+- **AGENT PHỤ:** token của các subagent (worker) mà session đã chạy. Đã nằm trong TỔNG, nên session nào có
+  AGENT PHỤ gần bằng TỔNG nghĩa là phần lớn tiền tiêu ở worker, không ở chat chính.
+- **CTX MAX:** prompt lớn nhất của một lượt gọi. Mỗi lượt đọc lại cả prompt đó, nên context lớn nhân với nhiều
+  lượt là chỗ tốn. Xem [context.md](context.md).
+- **MODEL:** model dùng nhiều nhất, `+N` là số model khác.
+- **TIÊU ĐỀ:** tên chat do Claude Code đặt (Codex không có thì để `-`).
+
+**Cửa sổ hẹp:** bảng session tự thu cho vừa chiều rộng. Cột TIÊU ĐỀ bị cắt ngắn trước (còn tối thiểu 12 ký tự), rồi ẩndần MODEL, CTX MAX, AGENT PHỤ, %, LƯỢT, PROJECT; cột token (VÀO, RA, ĐỌC CACHE, GHI CACHE, TỔNG) và QUY ĐỔI luôn được giữ.Báo cáo ghi một dòng "cửa sổ hẹp: đã ẩn cột ...". Kéo rộng cửa sổ (khoảng 150 cột) để xem đủ mọi cột.
+
+Lưu ý:
+- **Subagent tính vào session đã chạy chúng,** không thành session riêng trong danh sách chính. Muốn xem riêng
+  từng worker thì gõ `agents`. Con số `(26)` ở cột AGENT PHỤ là số worker của session đó.
+- **Ngày tính theo giờ máy:** một lượt gọi lúc 03:00 sáng giờ Việt Nam thuộc ngày hôm đó, dù theo UTC là hôm trước.
+- **Phiên cũ có thể thiếu:** Claude Code xoá file phiên cũ theo `cleanupPeriodDays`. Nếu kỳ bạn chọn bắt đầu trước
+  file phiên cũ nhất trên máy, báo cáo ghi một dòng lưu ý.
+- **Một session chạy qua nhiều ngày** hiện ở mỗi ngày với phần của ngày đó trong bảng "Theo ngày", nhưng trong bảng
+  session thì tính cả kỳ.
 
 ## wj top
 
@@ -92,6 +227,8 @@ Windows; macOS và Linux dùng `wj top` trong một cửa sổ terminal nhỏ.
 - **ĐỌC CACHE**: thường rẻ hơn nhiều so với VÀO, và thường chiếm phần lớn TỔNG.
 - **TỔNG**: cộng cả bốn loại, nên không phải số tiền. Giá thật do gateway quyết định.
 - **QUY ĐỔI** (`≈USD` trên overlay): số tiền nếu trả theo giá API niêm yết.
+
+Token tăng vọt bất thường: xem [Giảm context](context.md).
 
 ## Quy đổi tiền
 

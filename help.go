@@ -170,7 +170,18 @@ một project.
                           chuột phải để đóng
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
-  wj usage                bảng chi tiết theo project + app, có cột quy đổi USD theo giá API
+  wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
+                          ↑↓ chọn lệnh → báo cáo đổi theo ngay; Enter chốt; Tab điền; gõ để lọc danh sách;
+                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents,
+                          top, project, app (chọn lệnh có giá trị thì mở danh sách giá trị), reset, help.
+                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project
+  wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát
+                          kỳ: today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất),
+                          2026-11-09, 2026-11, 2026-11-01..2026-11-09. Tuần bắt đầu thứ Hai
+  wj usage month -top 0   -top N số session hiện ra (mặc định tự vừa màn hình / 20, 0 = tất cả)
+  wj usage today -agents  liệt kê từng worker (subagent) dưới session của nó: mô tả việc, model, lượt, token, ≈USD
+  wj usage lastweek -project game -app claude    lọc theo project, app
+  wj usage -since 24h     bảng cũ theo project + app, có cột quy đổi USD theo giá API
   wj usage -by project-model   từng model trong mỗi project
   wj usage -by app        theo app + model; còn có -by project, -by model
   wj usage -project game -app codex
