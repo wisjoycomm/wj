@@ -8,11 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 func prepareConsole() func() { return func() {} }
 
 func enableTerminalEscapes() func() { return func() {} }
+
+// processStartTime is not looked up here: markers from this system carry no start time
+// to compare, so the pid is trusted.
+func processStartTime(pid int) (time.Time, bool) { return time.Time{}, false }
 
 func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)

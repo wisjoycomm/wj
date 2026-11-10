@@ -355,14 +355,19 @@ func printModelTree(out io.Writer, tree []modelNode, total usageRow) {
 
 // printPeriodReport writes the report and returns how many sessions it listed.
 // top is how many sessions to list; 0 lists all.
-func printPeriodReport(out io.Writer, p usagePeriod, days []dayRow, sessions []sessionRow, total usageRow, top int, agents bool, width int, tree []modelNode, oldest time.Time) int {
-	fmt.Fprintf(out, "Token %s (Claude Code + Codex trên máy này)\n\n", p.Label)
+// liveByID maps a session id to its open Claude Code session; nil when none is open.
+func printPeriodReport(out io.Writer, p usagePeriod, days []dayRow, sessions []sessionRow, total usageRow, top int, agents bool, width int, tree []modelNode, liveByID map[string]liveSession, openOnly bool, oldest time.Time) int {
+	fmt.Fprintf(out, "Token %s (mọi agent đọc được trên máy này)\n\n", p.Label)
 	shownCount := 0
 	if total.Calls == 0 {
-		fmt.Fprintln(out, "Không có lượt gọi nào trong khoảng này.")
+		if openOnly {
+			fmt.Fprintln(out, "Không có phiên nào đang mở (hoặc phiên đang mở chưa dùng token trong kỳ này).")
+		} else {
+			fmt.Fprintln(out, "Không có lượt gọi nào trong khoảng này.")
+		}
 	} else {
 		fmt.Fprintf(out, "Tổng: %d lượt, %s token, %s, %d session\n", total.Calls, compactTokens(total.Total), costText(total), len(sessions))
-		if !p.singleDay() {
+		if !p.singleDay() && len(days) > 0 {
 			fmt.Fprintln(out, "\nTheo ngày:")
 			rows := [][]string{}
 			for _, d := range days {
@@ -390,7 +395,7 @@ func printPeriodReport(out io.Writer, p usagePeriod, days []dayRow, sessions []s
 			if n := len(se.workers); n > 0 {
 				agentText += fmt.Sprintf(" (%d)", n)
 			}
-			rows = append(rows, []string{shortID(se.ID), se.Project, fmt.Sprint(se.Calls),
+			rows = append(rows, []string{shortID(se.ID) + liveMark(liveByID[se.ID].Status), se.Project, fmt.Sprint(se.Calls),
 				compactTokens(se.Input), compactTokens(se.Output), compactTokens(se.CacheRead), compactTokens(se.CacheWrite), compactTokens(se.Total),
 				percentText(se.Total, total.Total), agentText, compactTokens(se.MaxCtx), costText(se.usageRow),
 				se.mainModel(), cutRunes(title, 40)})
@@ -451,6 +456,7 @@ type usageView struct {
 	Agents          bool   // list the workers under each session
 	Overview        bool   // start the report with one line per period (today, week, month...)
 	Width           int    // terminal width the tables must fit; 0 = no limit
+	Open            bool   // only the sessions that are open now (Claude Code)
 }
 
 // overviewSpecs are the periods of the overview, in the order of the keys 1-6.
@@ -572,8 +578,17 @@ func reportText(sc *sessionScanner, v usageView, now time.Time, maxLines int, ol
 		printOverview(&b, sc.periodOverview(v, now))
 		overview = b.String()
 	}
+	sc.refreshLive()
 	days, sessions, total := sc.periodReport(p, v.Project, v.Client)
 	tree := sc.periodTree(p, v.Project, v.Client)
+	liveByID := sc.liveByID
+	// Only the sessions that are open now: their own totals, no day table, no tree of
+	// everything else.
+	if v.Open {
+		sessions = keepOpen(sessions, liveByID)
+		total = totalOf(sessions)
+		days, tree = nil, nil
+	}
 	top := v.Top
 	auto := top < 0
 	if auto {
@@ -584,7 +599,7 @@ func reportText(sc *sessionScanner, v usageView, now time.Time, maxLines int, ol
 	}
 	for {
 		var b bytes.Buffer
-		shown := printPeriodReport(&b, p, days, sessions, total, top, v.Agents, v.Width, tree, oldest)
+		shown := printPeriodReport(&b, p, days, sessions, total, top, v.Agents, v.Width, tree, liveByID, v.Open, oldest)
 		text := overview + b.String()
 		lines := strings.Count(text, "\n")
 		if !auto || maxLines <= 0 || lines <= maxLines || shown <= 3 {

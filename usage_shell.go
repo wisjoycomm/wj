@@ -23,9 +23,10 @@ const usageShellHelp = `Lệnh gõ ở dòng dưới (không cần gõ "wj usage
   7d  30d                                              N ngày gần nhất
   2026-11-09   2026-11   2026-11-01..2026-11-09        một ngày, một tháng, một khoảng ngày
   agents  /  agents off                                bật/tắt liệt kê từng worker dưới session
+  open  /  open off                                    chỉ các phiên đang mở lúc này (Claude Code): ● bận, ○ rảnh
   top 30  /  top 0  /  top auto                        số session hiện ra (0 = tất cả)
   project TÊN  /  project all                          lọc theo project
-  app claude  /  app codex  /  app all                 lọc theo app
+  app claude  /  app codex  /  app opencode  /  app all   lọc theo app
   reset                                                về mặc định (hôm nay, không lọc)
   help                                                 xem lại bảng này
   q  hoặc  0  hoặc Enter                               thoát`
@@ -53,6 +54,16 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 	case "1", "2", "3", "4", "5", "6": // the numbers of the overview table
 		n, _ := strconv.Atoi(cmd)
 		v.Spec = overviewSpecs[n-1]
+		return "", false
+	case "open", "live", "running":
+		switch strings.ToLower(arg) {
+		case "", "on", "yes", "y":
+			v.Open = true
+		case "off", "no", "n":
+			v.Open = false
+		default:
+			return "open on hoặc open off", false
+		}
 		return "", false
 	case "agents", "agent", "workers":
 		switch strings.ToLower(arg) {
@@ -87,10 +98,10 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 		switch strings.ToLower(arg) {
 		case "", "all":
 			v.Client = ""
-		case "claude", "codex":
+		case "claude", "codex", "opencode":
 			v.Client = strings.ToLower(arg)
 		default:
-			return "app claude, app codex hoặc app all", false
+			return "app claude, codex, opencode hoặc all", false
 		}
 		return "", false
 	}
@@ -122,7 +133,7 @@ func usageFooter(v usageView) string {
 	return strings.Join(state, " · ") + "   —   gõ: 1-6 hoặc tên kỳ, 2026-11-05, agents, top 30, project TÊN, help, q"
 }
 
-var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex]; kỳ: " + periodHelp)
+var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex|opencode]; kỳ: " + periodHelp)
 
 // runUsageShell shows the report with a prompt under it. Without a terminal (a pipe,
 // a script) it prints the report once and returns.

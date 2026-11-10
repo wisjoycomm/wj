@@ -185,6 +185,8 @@ func commandName(word string) string {
 		return "app"
 	case "agent", "workers":
 		return "agents"
+	case "live", "running":
+		return "open"
 	case "h", "?":
 		return "help"
 	case "q", "exit", "0":
@@ -228,6 +230,12 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	} else {
 		agents.Apply, agents.Desc = "agents on", "liệt kê từng worker (subagent) dưới session của nó"
 	}
+	open := usageSuggestion{Name: "open", Insert: "open", Mark: v.Open}
+	if v.Open {
+		open.Apply, open.Desc = "open off", "đang bật: quay về xem mọi session của kỳ"
+	} else {
+		open.Apply, open.Desc = "open on", "chỉ các phiên đang mở lúc này (Claude Code), bận hay rảnh"
+	}
 	project := "tất cả"
 	if v.Project != "" {
 		project = v.Project
@@ -236,10 +244,10 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	if v.Client != "" {
 		client = v.Client
 	}
-	return append(list, agents,
+	return append(list, agents, open,
 		usageSuggestion{Name: "top", Insert: "top ", NeedsArg: true, Desc: "số session hiện ra (đang: " + topText(v) + ")", Mark: v.Top >= 0},
 		usageSuggestion{Name: "project", Insert: "project ", NeedsArg: true, Desc: "lọc theo project (đang: " + project + ")", Mark: v.Project != ""},
-		usageSuggestion{Name: "app", Insert: "app ", NeedsArg: true, Desc: "lọc theo app claude/codex (đang: " + client + ")", Mark: v.Client != ""},
+		usageSuggestion{Name: "app", Insert: "app ", NeedsArg: true, Desc: "lọc theo app (đang: " + client + ")", Mark: v.Client != ""},
 		usageSuggestion{Name: "reset", Insert: "reset", Apply: "reset", Desc: "về hôm nay, bỏ hết bộ lọc"},
 		usageSuggestion{Name: "help", Insert: "help", Apply: "help", Desc: "các phím và lệnh"},
 		usageSuggestion{Name: "quit", Insert: "quit", Apply: "q", Desc: "thoát (Esc hoặc Ctrl+C cũng được)"})
@@ -305,7 +313,7 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 			}
 		}
 	case "app":
-		for _, name := range []string{"all", "claude", "codex"} {
+		for _, name := range []string{"all", "claude", "codex", "opencode"} {
 			if has(name) {
 				list = append(list, option(name, "", "", v.Client == name || (name == "all" && v.Client == "")))
 			}
@@ -317,6 +325,15 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 		}{{"on", "liệt kê từng worker dưới session", true}, {"off", "chỉ hiện số worker", false}} {
 			if has(o.name) {
 				list = append(list, option(o.name, o.desc, "", v.Agents == o.on))
+			}
+		}
+	case "open":
+		for _, o := range []struct {
+			name, desc string
+			on         bool
+		}{{"on", "chỉ các phiên đang mở lúc này", true}, {"off", "mọi session của kỳ", false}} {
+			if has(o.name) {
+				list = append(list, option(o.name, o.desc, "", v.Open == o.on))
 			}
 		}
 	default:
@@ -462,6 +479,7 @@ func (ui *usageUI) commit(list []usageSuggestion, now time.Time) bool {
 // reportCache keeps the text of the views already drawn, so moving up and down the
 // list does not add everything up again. It is dropped when new calls arrive.
 type reportCache struct {
+	live  uint32 // changes when a session opens, closes or switches busy/idle
 	calls int
 	text  map[reportKey]string
 }
@@ -471,9 +489,9 @@ type reportKey struct {
 	day string
 }
 
-func (c *reportCache) sync(calls int) {
-	if c.text == nil || c.calls != calls {
-		c.text, c.calls = map[reportKey]string{}, calls
+func (c *reportCache) sync(calls int, live uint32) {
+	if c.text == nil || c.calls != calls || c.live != live {
+		c.text, c.calls, c.live = map[reportKey]string{}, calls, live
 	}
 }
 
@@ -627,8 +645,8 @@ const usageRefreshEvery = 5 * time.Second
 
 // scanFingerprint changes whenever the scanner learned anything new: a call, a chat
 // title or a worker description.
-func scanFingerprint(sc *sessionScanner) [3]int {
-	return [3]int{len(sc.calls), len(sc.titles), len(sc.agents)}
+func scanFingerprint(sc *sessionScanner) [4]int {
+	return [4]int{len(sc.calls), len(sc.titles), len(sc.agents), int(sc.liveStamp)}
 }
 
 // usageUILoop draws and reads keys until the user quits, and returns the view that
@@ -643,7 +661,8 @@ func usageUILoop(keys keySource, out io.Writer, sc *sessionScanner, v usageView,
 		width, height := size()
 		first, _ = resolvePeriod("lastmonth", now)
 		sc.scan(first.Start)
-		cache.sync(len(sc.calls))
+		sc.refreshLive()
+		cache.sync(len(sc.calls), sc.liveStamp)
 		ui.updated = now
 
 		rows := sc.periodOverview(ui.v, now)
@@ -705,6 +724,7 @@ func usageUILoop(keys keySource, out io.Writer, sc *sessionScanner, v usageView,
 				break
 			}
 			sc.scan(first.Start)
+			sc.refreshLive()
 			if scanFingerprint(sc) != before {
 				break
 			}
@@ -739,7 +759,7 @@ func runUsageScreen(file *os.File, out io.Writer, sc *sessionScanner, v usageVie
 	defer enableTerminalEscapes()()
 	fmt.Fprint(out, "\x1b[?1049h\x1b[2J\x1b[H")
 	// Reading a month of session files takes several seconds the first time.
-	fmt.Fprint(out, "Đang đọc file phiên của Claude Code và Codex trên máy này (lần đầu vài giây)...")
+	fmt.Fprint(out, "Đang đọc phiên của Claude Code, Codex, OpenCode trên máy này (lần đầu vài giây)...")
 	final, loopErr := usageUILoop(keys, out, sc, v, oldest, size, usageRefreshEvery)
 	fmt.Fprint(out, "\x1b[?1049l")
 	restore()

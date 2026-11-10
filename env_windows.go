@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -24,6 +25,21 @@ func prepareConsole() func() {
 		return func() {}
 	}
 	return func() { _ = windows.SetConsoleOutputCP(old) }
+}
+
+// processStartTime is when the process was created, which tells a live process from a
+// later one that was given the same pid.
+func processStartTime(pid int) (time.Time, bool) {
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer windows.CloseHandle(handle)
+	var created, exited, kernel, user windows.Filetime
+	if windows.GetProcessTimes(handle, &created, &exited, &kernel, &user) != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(0, created.Nanoseconds()), true
 }
 
 func processAlive(pid int) bool {

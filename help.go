@@ -32,7 +32,7 @@ LỆNH HAY DÙNG
   wj -use-profile adnx -run      đổi sang kết nối "adnx" và mở Claude
   wj top                         token mọi project, cập nhật liên tục
   wj overlay                     token luôn nổi trên màn hình (Windows)
-  wj usage                       bảng token Claude + Codex trong 24 giờ
+  wj usage                       token Claude, Codex, OpenCode theo ngày/tuần/tháng
   wj models                      lấy lại danh sách model từ gateway
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
@@ -157,7 +157,7 @@ Chỉ hiện tên, không bao giờ hiện key: giá trị trong file cấu hìn
 
 const helpUsage = `XEM TOKEN MỌI PROJECT
 
-Đọc thẳng file phiên của Claude Code và Codex trên máy này. Không cần proxy, không
+Đọc thẳng file phiên của Claude Code, Codex và OpenCode trên máy này. Không cần proxy, không
 gọi mạng, không ghi gì; tính cả phiên mở từ Orca. Các worktree của một repo gộp về
 một project.
 
@@ -172,9 +172,10 @@ một project.
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
                           ↑↓ chọn lệnh → báo cáo đổi theo ngay; Enter chốt; Tab điền; gõ để lọc danh sách;
-                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents,
+                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents, open,
                           top, project, app (chọn lệnh có giá trị thì mở danh sách giá trị), reset, help.
-                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project
+                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project.
+                          Phiên Claude đang mở có dấu ● (đang trả lời) hoặc ○ (rảnh); gõ open để chỉ xem chúng
   wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát
                           kỳ: today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất),
                           2026-11-09, 2026-11, 2026-11-01..2026-11-09. Tuần bắt đầu thứ Hai
@@ -187,7 +188,7 @@ một project.
   wj usage -project game -app codex
   -since 168h             khoảng thời gian (mặc định 24h); wj usage còn có -all
 
-Chỉ tính được khi file phiên còn trên máy. App khác (OpenCode...): wj help proxy.`
+Chỉ tính được khi file phiên còn trên máy. Chưa có: Cursor, Antigravity. App khác: wj help proxy.`
 
 const helpModels = `MODEL TỪ GATEWAY
 

@@ -260,6 +260,7 @@ func runCLIWithHome(args []string, input io.Reader, out io.Writer, home string) 
 			fmt.Fprintln(out, "Máy chưa có Claude Code. Cài bằng: wj apps install claude")
 		}
 		fmt.Fprintln(out, "Xong. Mở phiên Claude MỚI rồi gõ /status để kiểm tra (phiên đang mở vẫn dùng kết nối cũ).")
+		printOpenSessionsHint(out, home)
 		if *launch {
 			return runClaude(home)
 		}

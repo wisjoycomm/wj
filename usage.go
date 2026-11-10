@@ -63,6 +63,15 @@ type sessionScanner struct {
 	projects            map[string]string
 	titles              map[string]string    // session id -> the title Claude Code gave the chat
 	agents              map[string]agentMeta // session id + "/" + agent id -> what the subagent was asked to do
+	// OpenCode keeps everything in one SQLite file.
+	openCodeDB     string
+	openCodeNewest int64     // time_created (ms) of the newest row read
+	openCodeSeen   time.Time // modification time of the database at the last read
+	openCodeLoaded bool
+	// Claude Code sessions whose process is running right now (see usage_live.go).
+	live      []liveSession
+	liveByID  map[string]liveSession
+	liveStamp uint32 // changes when a session opens, closes or switches busy/idle
 }
 
 // agentMeta is what Claude Code writes next to a subagent's transcript.
@@ -77,13 +86,14 @@ func newSessionScanner(home string) *sessionScanner {
 		claudeDir = filepath.Join(home, ".claude")
 	}
 	return &sessionScanner{
-		claudeDir: claudeDir,
-		codexDir:  filepath.Dir(codexConfigPath(home)),
-		files:     map[string]*sessionFile{},
-		index:     map[string]int{},
-		projects:  map[string]string{},
-		titles:    map[string]string{},
-		agents:    map[string]agentMeta{},
+		claudeDir:  claudeDir,
+		codexDir:   filepath.Dir(codexConfigPath(home)),
+		openCodeDB: openCodeDB(home),
+		files:      map[string]*sessionFile{},
+		index:      map[string]int{},
+		projects:   map[string]string{},
+		titles:     map[string]string{},
+		agents:     map[string]agentMeta{},
 	}
 }
 
@@ -94,6 +104,7 @@ func (s *sessionScanner) scan(since time.Time) {
 	for _, dir := range []string{"sessions", "archived_sessions"} {
 		s.scanTree(filepath.Join(s.codexDir, dir), since, s.readCodexLine)
 	}
+	s.scanOpenCode(since)
 }
 
 func (s *sessionScanner) scanTree(root string, since time.Time, parse func(string, *sessionFile, []byte)) {
@@ -457,7 +468,7 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 	all := flags.Bool("all", false, "toàn bộ phiên còn lưu trên máy")
 	by := flags.String("by", "project-app", "gom theo: project, project-app, project-model, app (app + model), model")
 	project := flags.String("project", "", "chỉ tính một project")
-	client := flags.String("app", "", "chỉ tính một app: claude, codex")
+	client := flags.String("app", "", "chỉ tính một app: claude, codex, opencode")
 	top := flags.Int("top", -1, "số session liệt kê khi xem theo ngày/tuần/tháng (0 = tất cả; mặc định 20, một ngày thì tất cả)")
 	agents := flags.Bool("agents", false, "liệt kê từng worker (subagent) dưới session của nó, khi xem theo ngày/tuần/tháng")
 	// A period (today, week, 2026-11-09...) may come before or after the flags.
@@ -520,7 +531,7 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 	scanner := newSessionScanner(home)
 	scanner.scan(since)
 	list, total := scanner.summarize(usageFilter{Since: since, Project: *project, Client: *client, GroupBy: groupBy})
-	fmt.Fprintf(out, "Token đã dùng (%s; Claude Code + Codex trên máy này)\n\n", label)
+	fmt.Fprintf(out, "Token đã dùng (%s; mọi agent đọc được trên máy này)\n\n", label)
 	if total.Calls == 0 {
 		fmt.Fprintln(out, "Không có lượt gọi nào trong khoảng này.")
 		return nil
