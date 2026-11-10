@@ -75,15 +75,15 @@ func TestSuggestionsForAnEmptyPromptListPeriodsThenCommands(t *testing.T) {
 	s := uiFixture(t)
 	v := usageView{Spec: "week", Top: -1, Overview: true}
 	list, hint := buildSuggestions("", v, s.periodOverview(v, uiNow), nil, uiNow)
-	want := "today,yesterday,week,lastweek,month,lastmonth,agents,open,top,project,app,reset,help,quit"
+	want := "day,week,month,analytics,agents,open,blocks,limit,top,project,app,reset,help,quit"
 	if suggestionNames(list) != want || hint == "" {
 		t.Errorf("names = %s, hint = %q", suggestionNames(list), hint)
 	}
-	if !list[2].Mark || list[0].Mark || !strings.HasPrefix(list[2].Stats, "1 session · 1.3k") || list[1].Stats != "-" {
-		t.Errorf("week is marked and carries its numbers: %+v / %+v", list[2], list[1])
+	if !list[1].Mark || list[0].Mark || !strings.HasPrefix(list[1].Stats, "1 session · 1.3k") || !strings.Contains(list[1].Desc, "tuần này") {
+		t.Errorf("week is marked and carries its numbers: %+v / %+v", list[1], list[0])
 	}
-	if list[6].Apply != "agents on" || list[7].Apply != "open on" || list[8].Apply != "" || !list[8].NeedsArg {
-		t.Errorf("agents toggles, top needs a value: %+v %+v", list[6], list[7])
+	if list[3].Apply != "analytics on" || list[4].Apply != "agents on" || list[5].Apply != "open on" || list[6].Apply != "blocks on" || list[8].Apply != "" || !list[8].NeedsArg {
+		t.Errorf("agents toggles, top needs a value: %+v %+v", list[3], list[4])
 	}
 }
 
@@ -96,7 +96,10 @@ func TestSuggestionsNarrowAsYouType(t *testing.T) {
 		"/we":        "week",
 		"last":       "lastweek,lastmonth",
 		"to":         "today,top",
-		"3":          "week",
+		"2":          "week",
+		"3":          "month",
+		"y":          "yesterday",
+		"m":          "month",
 		"WEEK":       "week",
 		"q":          "quit",
 		"p":          "project",
@@ -134,7 +137,7 @@ func TestSuggestionsOfAnArgumentListItsValues(t *testing.T) {
 	if got, _ := buildSuggestions("project to", v, rows, projects, uiNow); suggestionNames(got) != "tool" {
 		t.Errorf("filter by typing = %+v", got)
 	}
-	for in, want := range map[string]string{"app ": "all,claude,codex,opencode", "top ": "auto,10,20,30,50,100,0", "agents ": "on,off", "top 7": "7"} {
+	for in, want := range map[string]string{"app ": "all,claude,codex,opencode,antigravity", "top ": "auto,10,20,30,50,100,0", "agents ": "on,off", "top 7": "7"} {
 		list, _ := buildSuggestions(in, v, rows, nil, uiNow)
 		if got := suggestionNames(list); got != want {
 			t.Errorf("%q gives %s, want %s", in, got, want)
@@ -159,10 +162,10 @@ func press(t *testing.T, s *sessionScanner, v usageView, raw string) (usageView,
 func TestArrowsPreviewTheReportAndEnterKeepsIt(t *testing.T) {
 	s := uiFixture(t)
 	start := usageView{Spec: "today", Top: -1, Overview: true}
-	// Typing nothing, the first Down lands on "today"; three more reach "lastweek".
-	final, drawn := press(t, s, start, "\x1b[B\x1b[B\x1b[B\x1b[B\r")
-	if final.Spec != "lastweek" {
-		t.Fatalf("spec = %q, want lastweek", final.Spec)
+	// Tab enters the list on the line in use (day); two Downs reach "month".
+	final, drawn := press(t, s, start, "\t\x1b[B\x1b[B\r")
+	if final.Spec != "month" {
+		t.Fatalf("spec = %q, want month", final.Spec)
 	}
 	frames := strings.Split(drawn, "\x1b[H")
 	previews := 0
@@ -171,18 +174,44 @@ func TestArrowsPreviewTheReportAndEnterKeepsIt(t *testing.T) {
 			previews++
 		}
 	}
-	if previews < 4 {
+	if previews < 3 {
 		t.Errorf("every arrow press should draw a preview, got %d", previews)
 	}
-	// The frame drawn while "lastweek" was highlighted already shows last week's report.
+	// The frame drawn while "month" was highlighted already shows this month's report.
 	found := false
 	for _, f := range frames {
-		if strings.Contains(f, "Đang xem trước: lastweek") && strings.Contains(f, "Token tuần trước") {
+		if strings.Contains(f, "Đang xem trước: month") && strings.Contains(f, "Token tháng này") {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("highlighting lastweek must redraw the report for last week")
+		t.Errorf("highlighting month must redraw the report for this month")
+	}
+}
+
+func TestArrowsOutsideTheListScrollAndStepThePeriod(t *testing.T) {
+	s := uiFixture(t)
+	start := usageView{Spec: "today", Top: -1, Overview: true}
+	// Without Tab, ↓ (a mouse wheel too) scrolls the report and never changes the view.
+	if final, drawn := press(t, s, start, "\x1b[B\x1b[B\x1b[B\r"); final.Spec != "today" || strings.Contains(drawn, "Đang xem trước") {
+		t.Errorf("↓ outside the list changed the view: %q", final.Spec)
+	}
+	// press runs on the real clock, so the dates are counted from today.
+	today := midnight(time.Now())
+	twoMonthsBack := time.Date(today.Year(), today.Month()-2, 1, 0, 0, 0, 0, today.Location())
+	for raw, want := range map[string]string{
+		"\x1b[D":             "yesterday",
+		"\x1b[D\x1b[D":       today.AddDate(0, 0, -2).Format("2006-01-02"),
+		"\x1b[D\x1b[C":       "today",
+		"\x1b[C":             "today", // nothing after today
+		"2\r\x1b[D":          "lastweek",
+		"3\r\x1b[D\x1b[D":    twoMonthsBack.Format("2006-01"),
+		"3\r\x1b[D\x1b[D1\r": twoMonthsBack.Format("2006-01-02"),
+		"\t\x1b[B\x1b[D":     "yesterday", // ← leaves the list and steps the period in use
+	} {
+		if final, _ := press(t, s, start, raw); final.Spec != want {
+			t.Errorf("%q gives %q, want %q", raw, final.Spec, want)
+		}
 	}
 }
 
@@ -201,7 +230,7 @@ func TestEscapeDropsThePreviewWithoutChangingTheView(t *testing.T) {
 func TestTypingFiltersThenEnterAppliesTheFirstMatch(t *testing.T) {
 	s := uiFixture(t)
 	start := usageView{Spec: "today", Top: -1, Overview: true}
-	for raw, want := range map[string]string{"lastm\r": "lastmonth", "2026-11-05\r": "2026-11-05", "3\r": "week", "wee\t\r": "week"} {
+	for raw, want := range map[string]string{"lastm\r": "lastmonth", "2026-11-05\r": "2026-11-05", "2\r": "week", "wee\t\r": "week"} {
 		if final, _ := press(t, s, start, raw); final.Spec != want {
 			t.Errorf("%q gives %q, want %q", raw, final.Spec, want)
 		}

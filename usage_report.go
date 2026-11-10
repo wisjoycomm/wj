@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -24,7 +25,21 @@ type usagePeriod struct {
 
 func (p usagePeriod) singleDay() bool { return p.Start.AddDate(0, 0, 1).Equal(p.End) }
 
-const periodHelp = "today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất), 2026-11-09, 2026-11, 2026-11-01..2026-11-09"
+const periodHelp = "today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất), 2026-11-09, 2026-W45 (tuần), 2026-11, 2026-11-01..2026-11-09"
+
+// weekStart is the Monday of the week that holds day.
+func weekStart(day time.Time) time.Time {
+	return day.AddDate(0, 0, -((int(day.Weekday()) + 6) % 7))
+}
+
+func midnight(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// dayCount is the number of whole days from a to b (both midnights).
+func dayCount(a, b time.Time) int {
+	return int(math.Round(b.Sub(a).Hours() / 24))
+}
 
 var weekdayNames = []string{"CN", "T2", "T3", "T4", "T5", "T6", "T7"}
 
@@ -44,7 +59,7 @@ func resolvePeriod(spec string, now time.Time) (usagePeriod, error) {
 		}
 		return usagePeriod{Start: start, End: end, Label: label}
 	}
-	monday := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
+	monday := weekStart(today)
 	firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 	spec = strings.ToLower(strings.TrimSpace(spec))
 	switch spec {
@@ -78,6 +93,15 @@ func resolvePeriod(spec string, now time.Time) (usagePeriod, error) {
 	}
 	if d, err := time.ParseInLocation("2006-01-02", spec, loc); err == nil {
 		return span(d, d.AddDate(0, 0, 1), "ngày "+dayText(d)), nil
+	}
+	// An ISO week, Monday to Sunday: 2026-W45.
+	var year, week int
+	if n, _ := fmt.Sscanf(spec, "%d-w%d", &year, &week); n == 2 && fmt.Sprintf("%d-w%02d", year, week) == spec {
+		jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, loc)
+		start := weekStart(jan4).AddDate(0, 0, 7*(week-1))
+		if y, w := start.ISOWeek(); y == year && w == week {
+			return span(start, start.AddDate(0, 0, 7), fmt.Sprintf("tuần %d-W%02d", year, week)), nil
+		}
 	}
 	if m, err := time.ParseInLocation("2006-01", spec, loc); err == nil {
 		return span(m, m.AddDate(0, 1, 0), "tháng "+m.Format("2006-01")), nil
@@ -225,7 +249,10 @@ func (s *sessionScanner) periodReport(p usagePeriod, project, client string) ([]
 // may be missing calls.
 func (s *sessionScanner) oldestSession() time.Time {
 	var oldest time.Time
-	roots := []string{filepath.Join(s.claudeDir, "projects"), filepath.Join(s.codexDir, "sessions"), filepath.Join(s.codexDir, "archived_sessions")}
+	roots := []string{filepath.Join(s.codexDir, "sessions"), filepath.Join(s.codexDir, "archived_sessions")}
+	for _, dir := range s.claudeDirs {
+		roots = append(roots, filepath.Join(dir, "projects"))
+	}
 	for _, root := range roots {
 		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".jsonl") {
@@ -457,55 +484,39 @@ type usageView struct {
 	Overview        bool   // start the report with one line per period (today, week, month...)
 	Width           int    // terminal width the tables must fit; 0 = no limit
 	Open            bool   // only the sessions that are open now (Claude Code)
-}
-
-// overviewSpecs are the periods of the overview, in the order of the keys 1-6.
-var overviewSpecs = []string{"today", "yesterday", "week", "lastweek", "month", "lastmonth"}
-
-var overviewNames = map[string]string{
-	"today": "hôm nay", "yesterday": "hôm qua", "week": "tuần này",
-	"lastweek": "tuần trước", "month": "tháng này", "lastmonth": "tháng trước",
-}
-
-// canonicalSpec is the period as the overview names it, so "ThisWeek" and "week" match.
-func canonicalSpec(spec string) string {
-	spec = strings.ToLower(strings.TrimSpace(spec))
-	switch spec {
-	case "thisweek":
-		return "week"
-	case "thismonth":
-		return "month"
-	}
-	return spec
+	Blocks          bool   // 5-hour blocks instead of sessions
+	Limit           string // token limit of a block: 5M, max; empty = none
+	Analytics       bool   // where the tokens of the period went, instead of sessions
 }
 
 type overviewRow struct {
 	usageRow
 	Key, Spec, Name string
+	Unit            periodUnit // unitNone for the extra row of a typed period
 	Period          usagePeriod
 	Sessions        int
 	Current         bool
 }
 
-// periodOverview adds up every period of the overview in one pass over the calls. A
-// period typed by hand (a date, 7d...) gets a row of its own, so the view is never
-// missing from the table.
+// periodOverview adds up the day, the week and the month that hold the viewed period
+// (today when it holds today), in one pass over the calls. A period that is none of
+// these (7d, a range) gets a row of its own, so the view is never missing.
 func (s *sessionScanner) periodOverview(v usageView, now time.Time) []overviewRow {
-	current := canonicalSpec(v.Spec)
-	var rows []overviewRow
-	known := false
-	for i, spec := range overviewSpecs {
-		p, err := resolvePeriod(spec, now)
-		if err != nil {
-			continue
-		}
-		known = known || spec == current
-		rows = append(rows, overviewRow{Key: fmt.Sprint(i + 1), Spec: spec, Name: overviewNames[spec], Period: p, Current: spec == current})
+	viewed, err := resolvePeriod(v.Spec, now)
+	if err != nil {
+		viewed, _ = resolvePeriod("today", now)
 	}
-	if !known {
-		if p, err := resolvePeriod(v.Spec, now); err == nil {
-			rows = append(rows, overviewRow{Key: "-", Spec: strings.TrimSpace(v.Spec), Name: "đang xem", Period: p, Current: true})
-		}
+	current := unitOf(viewed)
+	anchor := anchorDay(viewed, now)
+	var rows []overviewRow
+	for i, u := range periodUnits {
+		start := unitStart(u, anchor)
+		p := usagePeriod{Start: start, End: unitStep(u, start, 1)}
+		rows = append(rows, overviewRow{Key: fmt.Sprint(i + 1), Unit: u, Spec: unitSpec(u, start, now),
+			Name: relativeName(u, start, now), Period: p, Current: u == current})
+	}
+	if current == unitNone {
+		rows = append(rows, overviewRow{Key: "-", Spec: strings.TrimSpace(v.Spec), Name: "đang xem", Period: viewed, Current: true})
 	}
 	sessions := make([]map[string]bool, len(rows))
 	for i := range sessions {
@@ -533,14 +544,21 @@ func rangeText(p usagePeriod) string {
 }
 
 func printOverview(out io.Writer, rows []overviewRow) {
-	fmt.Fprintln(out, "Các kỳ (gõ số hoặc tên kỳ để chuyển; ▶ là kỳ đang xem):")
+	fmt.Fprintln(out, "Các kỳ (1 2 3 hoặc day/week/month để đổi; ← → kỳ trước/sau; ▶ là kỳ đang xem):")
 	cells := [][]string{}
 	for _, r := range rows {
 		marker := " "
 		if r.Current {
 			marker = "▶"
 		}
-		row := []string{marker, r.Key + " " + r.Spec, r.Name, rangeText(r.Period), "-", "-", "-", "-"}
+		kind, name := r.Spec, r.Name
+		if r.Unit != unitNone {
+			kind = r.Unit.command()
+			if name == "" {
+				name = r.Spec
+			}
+		}
+		row := []string{marker, r.Key + " " + kind, name, rangeText(r.Period), "-", "-", "-", "-"}
 		if r.Calls > 0 {
 			row[4], row[5], row[6], row[7] = fmt.Sprint(r.Sessions), fmt.Sprint(r.Calls), compactTokens(r.Total), costText(r.usageRow)
 		}
@@ -566,9 +584,9 @@ func reportText(sc *sessionScanner, v usageView, now time.Time, maxLines int, ol
 	}
 	since := p.Start
 	if v.Overview {
-		// The overview reaches back to the start of last month.
-		if first, err := resolvePeriod("lastmonth", now); err == nil && first.Start.Before(since) {
-			since = first.Start
+		// The overview reaches back to the start of the month of the viewed period.
+		if m := unitStart(unitMonth, anchorDay(p, now)); m.Before(since) {
+			since = m
 		}
 	}
 	sc.scan(since)
@@ -576,7 +594,21 @@ func reportText(sc *sessionScanner, v usageView, now time.Time, maxLines int, ol
 	if v.Overview {
 		var b bytes.Buffer
 		printOverview(&b, sc.periodOverview(v, now))
+		sc.printChart(&b, v, p, now)
 		overview = b.String()
+	}
+	if v.Analytics {
+		var b bytes.Buffer
+		sc.printAnalytics(&b, p, v)
+		return overview + b.String(), nil
+	}
+	if v.Blocks {
+		// A block that started up to 5 hours before the period still reaches into it.
+		since := p.Start.Add(-blockLength)
+		sc.scan(since)
+		var b bytes.Buffer
+		err := printBlocks(&b, p, sc.blocks(since, v.Project, v.Client, now), v.Limit, now)
+		return overview + b.String(), err
 	}
 	sc.refreshLive()
 	days, sessions, total := sc.periodReport(p, v.Project, v.Client)

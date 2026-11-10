@@ -33,6 +33,8 @@ func testScanner(t *testing.T) (*sessionScanner, string) {
 	t.Helper()
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("CODEX_HOME", "")
+	t.Setenv("ANTIGRAVITY_DATA_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	home := t.TempDir()
 	return newSessionScanner(home), home
 }

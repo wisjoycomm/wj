@@ -32,7 +32,7 @@ LỆNH HAY DÙNG
   wj -use-profile adnx -run      đổi sang kết nối "adnx" và mở Claude
   wj top                         token mọi project, cập nhật liên tục
   wj overlay                     token luôn nổi trên màn hình (Windows)
-  wj usage                       token Claude, Codex, OpenCode theo ngày/tuần/tháng
+  wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng
   wj models                      lấy lại danh sách model từ gateway
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
@@ -157,7 +157,7 @@ Chỉ hiện tên, không bao giờ hiện key: giá trị trong file cấu hìn
 
 const helpUsage = `XEM TOKEN MỌI PROJECT
 
-Đọc thẳng file phiên của Claude Code, Codex và OpenCode trên máy này. Không cần proxy, không
+Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này. Không cần proxy, không
 gọi mạng, không ghi gì; tính cả phiên mở từ Orca. Các worktree của một repo gộp về
 một project.
 
@@ -171,24 +171,33 @@ một project.
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
-                          ↑↓ chọn lệnh → báo cáo đổi theo ngay; Enter chốt; Tab điền; gõ để lọc danh sách;
-                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents, open,
-                          top, project, app (chọn lệnh có giá trị thì mở danh sách giá trị), reset, help.
-                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project.
+                          Kỳ: day, week, month (1 2 3); ← → kỳ trước/sau; ↑↓ cuộn. Tab vào danh sách lệnh,
+                          ở đó ↑↓ chọn → báo cáo đổi theo ngay; Enter chốt; gõ để lọc; Esc rời; q hoặc Ctrl+C
+                          thoát. Lệnh: day, week, month, analytics, agents, open, blocks, limit, top, project, app, reset, help.
+                          Đầu báo cáo có bảng ngày/tuần/tháng và biểu đồ token theo kỳ; cuối có cây tổng hợp.
                           Phiên Claude đang mở có dấu ● (đang trả lời) hoặc ○ (rảnh); gõ open để chỉ xem chúng
   wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát
                           kỳ: today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất),
-                          2026-11-09, 2026-11, 2026-11-01..2026-11-09. Tuần bắt đầu thứ Hai
+                          2026-11-09, 2026-W45, 2026-11, 2026-11-01..2026-11-09. Tuần bắt đầu thứ Hai
   wj usage month -top 0   -top N số session hiện ra (mặc định tự vừa màn hình / 20, 0 = tất cả)
   wj usage today -agents  liệt kê từng worker (subagent) dưới session của nó: mô tả việc, model, lượt, token, ≈USD
-  wj usage lastweek -project game -app claude    lọc theo project, app
+  wj usage lastweek -project game -app claude    lọc theo project, app (claude, codex, opencode, antigravity)
+  wj usage blocks         khối 5 giờ như gói Claude tính: mỗi khối lượt, token, ≈USD; khối đang chạy có tốc độ
+                          (token/phút, ≈USD/giờ) và dự kiến lúc hết khối. Cũng nhận kỳ: wj usage blocks week
+  wj usage blocks -limit 5M   giới hạn token một khối: cột % và cảnh báo từ 80%; -limit max = khối lớn nhất trước đó
+  wj usage analytics week phân tích vì sao tốn token: loại token (đọc/ghi cache, ra, suy nghĩ), cỡ ngữ cảnh,
+                          tool mỗi lượt gọi, cache hết hạn, nén ngữ cảnh, phiên chính/worker, model, giờ trong ngày,
+                          session tốn nhất và vài câu "Vì sao tốn". Kỳ như trên; không ghi kỳ = hôm nay
+  wj usage week -json     in JSON thay vì bảng (cho script, status line); cũng dùng với blocks, analytics và -since/-by
   wj usage -since 24h     bảng cũ theo project + app, có cột quy đổi USD theo giá API
   wj usage -by project-model   từng model trong mỗi project
   wj usage -by app        theo app + model; còn có -by project, -by model
   wj usage -project game -app codex
   -since 168h             khoảng thời gian (mặc định 24h); wj usage còn có -all
 
-Chỉ tính được khi file phiên còn trên máy. Chưa có: Cursor, Antigravity. App khác: wj help proxy.`
+Thư mục: CLAUDE_CONFIG_DIR (nhiều thư mục cách nhau dấu phẩy; mặc định ~/.claude và ~/.config/claude),
+CODEX_HOME, OPENCODE_DATA_DIR, ANTIGRAVITY_DATA_DIR (mặc định ~/.gemini/antigravity*).
+Chỉ tính được khi file phiên còn trên máy. Chưa có: Cursor (token nằm trên máy chủ của họ). App khác: wj help proxy.`
 
 const helpModels = `MODEL TỪ GATEWAY
 

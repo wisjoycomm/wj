@@ -117,25 +117,50 @@ func priceKey(model string) string {
 // priceOf finds a model by name. A name that is not listed has no price: guessing from
 // a similar name would print a confident wrong number.
 func priceOf(model string) (modelPrice, bool) {
-	price, ok := modelPrices[priceKey(model)]
-	return price, ok
+	key := priceKey(model)
+	if price, ok := modelPrices[key]; ok {
+		return price, ok
+	}
+	// Antigravity names a thinking level (gemini-3.8-flash-high) or the family first
+	// (claude-4.5-sonnet); these bill as the plain model.
+	if m := effortSuffix.FindStringSubmatch(key); m != nil {
+		key = m[1]
+	} else if m := familyFirst.FindStringSubmatch(key); m != nil {
+		key = "claude-" + m[2] + "-" + m[1]
+	}
+	if price, ok := modelPrices[key]; ok {
+		return price, ok
+	}
+	// gemini-3.1-pro is sold as gemini-3.1-pro-preview.
+	price, ok := modelPrices[key+"-preview"]
+	return price, ok && strings.HasPrefix(key, "gemini-")
 }
+
+var (
+	effortSuffix = regexp.MustCompile(`^((?:gemini-[\d-]+-flash)|gpt-oss-\d+b)-(?:high|medium|low)$`)
+	familyFirst  = regexp.MustCompile(`^claude-([\d-]+)-(opus|sonnet|haiku)$`)
+)
 
 // callCost is what one call would cost at list price. The tier comes from the call's
 // own prompt size, which counts cached tokens too.
 func callCost(call sessionCall) (float64, bool) {
+	parts, ok := costParts(call)
+	return parts[0] + parts[1] + parts[2] + parts[3], ok
+}
+
+// costParts is callCost split by kind of token: input, output, cache read, cache write.
+func costParts(call sessionCall) ([4]float64, bool) {
 	price, ok := priceOf(call.Model)
 	if !ok {
-		return 0, false
+		return [4]float64{}, false
 	}
 	rates := price.tokenRates
 	if price.LongFrom > 0 && call.Input+call.CacheRead+call.CacheWrite > price.LongFrom {
 		rates = price.Long
 	}
 	write1h := min(call.CacheWrite1h, call.CacheWrite)
-	return float64(call.Input)*rates.Input + float64(call.Output)*rates.Output +
-		float64(call.CacheRead)*rates.CacheRead + float64(call.CacheWrite-write1h)*rates.Write5m +
-		float64(write1h)*rates.Write1h, true
+	return [4]float64{float64(call.Input) * rates.Input, float64(call.Output) * rates.Output,
+		float64(call.CacheRead) * rates.CacheRead, float64(call.CacheWrite-write1h)*rates.Write5m + float64(write1h)*rates.Write1h}, true
 }
 
 // costText marks what the number leaves out: "$12+" has tokens without a price on top
