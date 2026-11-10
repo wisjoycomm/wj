@@ -75,14 +75,14 @@ func TestSuggestionsForAnEmptyPromptListPeriodsThenCommands(t *testing.T) {
 	s := uiFixture(t)
 	v := usageView{Spec: "week", Top: -1, Overview: true}
 	list, hint := buildSuggestions("", v, s.periodOverview(v, uiNow), nil, uiNow)
-	want := "today,yesterday,week,lastweek,month,lastmonth,agents,top,project,app,reset,help,quit"
+	want := "today,yesterday,week,lastweek,month,lastmonth,agents,open,top,project,app,reset,help,quit"
 	if suggestionNames(list) != want || hint == "" {
 		t.Errorf("names = %s, hint = %q", suggestionNames(list), hint)
 	}
 	if !list[2].Mark || list[0].Mark || !strings.HasPrefix(list[2].Stats, "1 session · 1.3k") || list[1].Stats != "-" {
 		t.Errorf("week is marked and carries its numbers: %+v / %+v", list[2], list[1])
 	}
-	if list[6].Apply != "agents on" || list[7].Apply != "" || !list[7].NeedsArg {
+	if list[6].Apply != "agents on" || list[7].Apply != "open on" || list[8].Apply != "" || !list[8].NeedsArg {
 		t.Errorf("agents toggles, top needs a value: %+v %+v", list[6], list[7])
 	}
 }

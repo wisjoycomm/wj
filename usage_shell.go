@@ -23,6 +23,7 @@ const usageShellHelp = `Lệnh gõ ở dòng dưới (không cần gõ "wj usage
   7d  30d                                              N ngày gần nhất
   2026-11-09   2026-11   2026-11-01..2026-11-09        một ngày, một tháng, một khoảng ngày
   agents  /  agents off                                bật/tắt liệt kê từng worker dưới session
+  open  /  open off                                    chỉ các phiên đang mở lúc này (Claude Code): ● bận, ○ rảnh
   top 30  /  top 0  /  top auto                        số session hiện ra (0 = tất cả)
   project TÊN  /  project all                          lọc theo project
   app claude  /  app codex  /  app opencode  /  app all   lọc theo app
@@ -53,6 +54,16 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 	case "1", "2", "3", "4", "5", "6": // the numbers of the overview table
 		n, _ := strconv.Atoi(cmd)
 		v.Spec = overviewSpecs[n-1]
+		return "", false
+	case "open", "live", "running":
+		switch strings.ToLower(arg) {
+		case "", "on", "yes", "y":
+			v.Open = true
+		case "off", "no", "n":
+			v.Open = false
+		default:
+			return "open on hoặc open off", false
+		}
 		return "", false
 	case "agents", "agent", "workers":
 		switch strings.ToLower(arg) {

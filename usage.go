@@ -68,6 +68,10 @@ type sessionScanner struct {
 	openCodeNewest int64     // time_created (ms) of the newest row read
 	openCodeSeen   time.Time // modification time of the database at the last read
 	openCodeLoaded bool
+	// Claude Code sessions whose process is running right now (see usage_live.go).
+	live      []liveSession
+	liveByID  map[string]liveSession
+	liveStamp uint32 // changes when a session opens, closes or switches busy/idle
 }
 
 // agentMeta is what Claude Code writes next to a subagent's transcript.

@@ -142,7 +142,7 @@ func TestPeriodReportByDayListsEveryDayAndKeepsTheOrder(t *testing.T) {
 		t.Errorf("days = %+v", days)
 	}
 	var out bytes.Buffer
-	printPeriodReport(&out, p, days, nil, usageRow{}, 0, false, 0, nil, time.Time{})
+	printPeriodReport(&out, p, days, nil, usageRow{}, 0, false, 0, nil, nil, false, time.Time{})
 	if !strings.Contains(out.String(), "Không có lượt gọi") {
 		t.Errorf("empty total should say so: %s", out.String())
 	}
@@ -268,8 +268,8 @@ func TestPeriodReportListsWorkersWithTheirDescription(t *testing.T) {
 	}
 
 	var with, without bytes.Buffer
-	printPeriodReport(&with, p, nil, sessions, total, 0, true, 0, nil, time.Time{})
-	printPeriodReport(&without, p, nil, sessions, total, 0, false, 0, nil, time.Time{})
+	printPeriodReport(&with, p, nil, sessions, total, 0, true, 0, nil, nil, false, time.Time{})
+	printPeriodReport(&without, p, nil, sessions, total, 0, false, 0, nil, nil, false, time.Time{})
 	if !strings.Contains(with.String(), "└ aaaa1111") || !strings.Contains(with.String(), "T5.10 event shop") {
 		t.Errorf("-agents should list the workers:\n%s", with.String())
 	}
@@ -291,7 +291,7 @@ func TestPeriodReportCapsTheWorkersShownPerSession(t *testing.T) {
 	p, _ := resolvePeriod("2026-11-09", time.Date(2026, 11, 9, 12, 0, 0, 0, testZone))
 	_, sessions, total := s.periodReport(p, "", "")
 	var out bytes.Buffer
-	printPeriodReport(&out, p, nil, sessions, total, 0, true, 0, nil, time.Time{})
+	printPeriodReport(&out, p, nil, sessions, total, 0, true, 0, nil, nil, false, time.Time{})
 	if got := strings.Count(out.String(), "└ w"); got != maxWorkersShown || !strings.Contains(out.String(), "còn 3 worker nhỏ hơn") {
 		t.Errorf("workers shown = %d:\n%s", got, out.String())
 	}
