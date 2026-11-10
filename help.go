@@ -32,7 +32,7 @@ LỆNH HAY DÙNG
   wj -use-profile adnx -run      đổi sang kết nối "adnx" và mở Claude
   wj top                         token mọi project, cập nhật liên tục
   wj overlay                     token luôn nổi trên màn hình (Windows)
-  wj usage                       bảng token Claude + Codex trong 24 giờ
+  wj usage                       token Claude, Codex, OpenCode theo ngày/tuần/tháng
   wj models                      lấy lại danh sách model từ gateway
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
@@ -157,7 +157,7 @@ Chỉ hiện tên, không bao giờ hiện key: giá trị trong file cấu hìn
 
 const helpUsage = `XEM TOKEN MỌI PROJECT
 
-Đọc thẳng file phiên của Claude Code và Codex trên máy này. Không cần proxy, không
+Đọc thẳng file phiên của Claude Code, Codex và OpenCode trên máy này. Không cần proxy, không
 gọi mạng, không ghi gì; tính cả phiên mở từ Orca. Các worktree của một repo gộp về
 một project.
 
@@ -187,7 +187,7 @@ một project.
   wj usage -project game -app codex
   -since 168h             khoảng thời gian (mặc định 24h); wj usage còn có -all
 
-Chỉ tính được khi file phiên còn trên máy. App khác (OpenCode...): wj help proxy.`
+Chỉ tính được khi file phiên còn trên máy. Chưa có: Cursor, Antigravity. App khác: wj help proxy.`
 
 const helpModels = `MODEL TỪ GATEWAY
 

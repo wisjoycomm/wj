@@ -1,7 +1,8 @@
 # Token
 
-Đọc thẳng file phiên của Claude Code và Codex trên máy này. Không cần proxy, không gọi
-mạng, tính cả phiên mở từ Orca. Các worktree của một repo gộp về một project.
+Đọc thẳng file phiên của Claude Code, Codex và OpenCode trên máy này (Claude, Codex: file `.jsonl`;
+OpenCode: file cơ sở dữ liệu `opencode.db`). Không cần proxy, không gọi mạng, không dùng token, tính cả
+phiên mở từ Orca. Các worktree của một repo gộp về một project.
 
 ## Lệnh
 
@@ -171,7 +172,7 @@ Cùng báo cáo với overlay mở rộng, thêm số lượt và cache tách đ
 - Project dùng nhiều model có thêm một dòng `└` cho mỗi model.
 - Terminal hẹp thì gộp cache thành một cột, hẹp nữa thì bỏ cột MODEL (model ghi sau `└`).
   Terminal thấp thì bớt dòng, ghi `...và N project khác`.
-- Dùng nhiều app (Claude, Codex) thì có thêm dòng `Theo app`.
+- Dùng nhiều app (Claude, Codex, OpenCode) thì có thêm dòng `Theo app`.
 
 ## Tổng cả máy
 
@@ -258,4 +259,20 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 
 - Chỉ tính được khi file phiên còn trên máy.
 - Số liệu của từng máy riêng, không cộng giữa các máy.
-- App khác (OpenCode...) đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
+- **Cursor và Antigravity chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy;  Antigravity có số trong cơ sở dữ liệu nhưng định dạng chưa có tài liệu, chưa đối chiếu được. Hai app này  không có mặt trong `wj usage` và `wj top`. Báo cáo chỉ gồm các app ghi trong dòng đầu.- App khác đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
+
+## OpenCode
+
+OpenCode lưu mọi phiên trong một file SQLite, `~/.local/share/opencode/opencode.db` (đổi bằng `OPENCODE_DATA_DIR`
+hoặc `XDG_DATA_HOME`). `wj` mở file ở chế độ chỉ đọc, đọc cả file `-wal` kèm theo nên thấy cả những lượt mới nhất,
+kể cả khi OpenCode đang chạy.
+
+Chỉ đọc các tin nhắn trả lời của mô hình có số token (VÀO, RA, suy luận, đọc cache, ghi cache), tên model và thư mục
+làm việc của session; không đọc nội dung tin nhắn. Hai quy ước:
+
+- **Suy luận (`reasoning`) được cộng vào RA,** vì Claude và Codex gộp chung. Số RA của OpenCode vì vậy lớn hơn số
+  `output` mà `opencode stats` in ra.
+- **Session con tính vào session cha,** như worker của Claude: xem bằng `agents`.
+
+Lượt lỗi hoặc bị ngắt (không có token) không được tính. Đối chiếu: `opencode stats` ghi "313 steps · 9m tokens", `wj`
+tính 288 lượt, 9,0M token trên cùng dữ liệu; 25 lượt chênh là lượt không có token.
