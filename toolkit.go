@@ -47,7 +47,7 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 	case "init":
 		return runInit(args[1:], input, out)
 	case "usage":
-		return runUsage(args[1:], out)
+		return runUsage(args[1:], input, out)
 	case "top":
 		return runTop(args[1:], out)
 	case "overlay":
@@ -153,8 +153,20 @@ func subMenu(title string, items []menuItem, input io.Reader, out io.Writer) err
 
 func agentMenu(input io.Reader, out io.Writer) error {
 	return subMenu("AI Agent", []menuItem{
-		{"Xem token mọi project (wj top; cửa sổ nổi: wj overlay; chi tiết: wj usage)", func() error { return runTop(nil, out) }},
+		{"Xem token mọi project (wj top, wj overlay, wj usage)", func() error { return tokenMenu(input, out) }},
 		{"Kết nối và cấu hình agent (gateway, model, kiểm tra, đo qua mitmproxy)", func() error { return agentConfigMenu(input, out) }},
+	}, input, out)
+}
+
+func tokenMenu(input io.Reader, out io.Writer) error {
+	return subMenu("Xem token", []menuItem{
+		{"Bảng trực tiếp mọi project, theo model, cache và ≈USD (wj top)", func() error { return runTop(nil, out) }},
+		{"Overlay luôn nổi trên màn hình (wj overlay)", func() error { return runApp([]string{"overlay"}, input, out) }},
+		{"Đóng overlay (wj overlay stop)", func() error { return runApp([]string{"overlay", "stop"}, input, out) }},
+		{"Theo ngày/tuần/tháng, từng session và worker tốn bao nhiêu, gõ lệnh để đổi kỳ (wj usage)", func() error { return runUsage(nil, input, out) }},
+		{"Bảng chi tiết 30 ngày, từng model trong mỗi project", func() error {
+			return runUsage([]string{"-since", "720h", "-by", "project-model"}, input, out)
+		}},
 	}, input, out)
 }
 
