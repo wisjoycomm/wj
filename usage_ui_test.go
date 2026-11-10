@@ -134,7 +134,7 @@ func TestSuggestionsOfAnArgumentListItsValues(t *testing.T) {
 	if got, _ := buildSuggestions("project to", v, rows, projects, uiNow); suggestionNames(got) != "tool" {
 		t.Errorf("filter by typing = %+v", got)
 	}
-	for in, want := range map[string]string{"app ": "all,claude,codex", "top ": "auto,10,20,30,50,100,0", "agents ": "on,off", "top 7": "7"} {
+	for in, want := range map[string]string{"app ": "all,claude,codex,opencode", "top ": "auto,10,20,30,50,100,0", "agents ": "on,off", "top 7": "7"} {
 		list, _ := buildSuggestions(in, v, rows, nil, uiNow)
 		if got := suggestionNames(list); got != want {
 			t.Errorf("%q gives %s, want %s", in, got, want)

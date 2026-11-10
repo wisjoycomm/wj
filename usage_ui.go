@@ -239,7 +239,7 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	return append(list, agents,
 		usageSuggestion{Name: "top", Insert: "top ", NeedsArg: true, Desc: "số session hiện ra (đang: " + topText(v) + ")", Mark: v.Top >= 0},
 		usageSuggestion{Name: "project", Insert: "project ", NeedsArg: true, Desc: "lọc theo project (đang: " + project + ")", Mark: v.Project != ""},
-		usageSuggestion{Name: "app", Insert: "app ", NeedsArg: true, Desc: "lọc theo app claude/codex (đang: " + client + ")", Mark: v.Client != ""},
+		usageSuggestion{Name: "app", Insert: "app ", NeedsArg: true, Desc: "lọc theo app (đang: " + client + ")", Mark: v.Client != ""},
 		usageSuggestion{Name: "reset", Insert: "reset", Apply: "reset", Desc: "về hôm nay, bỏ hết bộ lọc"},
 		usageSuggestion{Name: "help", Insert: "help", Apply: "help", Desc: "các phím và lệnh"},
 		usageSuggestion{Name: "quit", Insert: "quit", Apply: "q", Desc: "thoát (Esc hoặc Ctrl+C cũng được)"})
@@ -305,7 +305,7 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 			}
 		}
 	case "app":
-		for _, name := range []string{"all", "claude", "codex"} {
+		for _, name := range []string{"all", "claude", "codex", "opencode"} {
 			if has(name) {
 				list = append(list, option(name, "", "", v.Client == name || (name == "all" && v.Client == "")))
 			}
@@ -739,7 +739,7 @@ func runUsageScreen(file *os.File, out io.Writer, sc *sessionScanner, v usageVie
 	defer enableTerminalEscapes()()
 	fmt.Fprint(out, "\x1b[?1049h\x1b[2J\x1b[H")
 	// Reading a month of session files takes several seconds the first time.
-	fmt.Fprint(out, "Đang đọc file phiên của Claude Code và Codex trên máy này (lần đầu vài giây)...")
+	fmt.Fprint(out, "Đang đọc phiên của Claude Code, Codex, OpenCode trên máy này (lần đầu vài giây)...")
 	final, loopErr := usageUILoop(keys, out, sc, v, oldest, size, usageRefreshEvery)
 	fmt.Fprint(out, "\x1b[?1049l")
 	restore()

@@ -356,7 +356,7 @@ func printModelTree(out io.Writer, tree []modelNode, total usageRow) {
 // printPeriodReport writes the report and returns how many sessions it listed.
 // top is how many sessions to list; 0 lists all.
 func printPeriodReport(out io.Writer, p usagePeriod, days []dayRow, sessions []sessionRow, total usageRow, top int, agents bool, width int, tree []modelNode, oldest time.Time) int {
-	fmt.Fprintf(out, "Token %s (Claude Code + Codex trên máy này)\n\n", p.Label)
+	fmt.Fprintf(out, "Token %s (mọi agent đọc được trên máy này)\n\n", p.Label)
 	shownCount := 0
 	if total.Calls == 0 {
 		fmt.Fprintln(out, "Không có lượt gọi nào trong khoảng này.")

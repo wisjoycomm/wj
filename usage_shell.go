@@ -25,7 +25,7 @@ const usageShellHelp = `Lệnh gõ ở dòng dưới (không cần gõ "wj usage
   agents  /  agents off                                bật/tắt liệt kê từng worker dưới session
   top 30  /  top 0  /  top auto                        số session hiện ra (0 = tất cả)
   project TÊN  /  project all                          lọc theo project
-  app claude  /  app codex  /  app all                 lọc theo app
+  app claude  /  app codex  /  app opencode  /  app all   lọc theo app
   reset                                                về mặc định (hôm nay, không lọc)
   help                                                 xem lại bảng này
   q  hoặc  0  hoặc Enter                               thoát`
@@ -87,10 +87,10 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 		switch strings.ToLower(arg) {
 		case "", "all":
 			v.Client = ""
-		case "claude", "codex":
+		case "claude", "codex", "opencode":
 			v.Client = strings.ToLower(arg)
 		default:
-			return "app claude, app codex hoặc app all", false
+			return "app claude, codex, opencode hoặc all", false
 		}
 		return "", false
 	}
@@ -122,7 +122,7 @@ func usageFooter(v usageView) string {
 	return strings.Join(state, " · ") + "   —   gõ: 1-6 hoặc tên kỳ, 2026-11-05, agents, top 30, project TÊN, help, q"
 }
 
-var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex]; kỳ: " + periodHelp)
+var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex|opencode]; kỳ: " + periodHelp)
 
 // runUsageShell shows the report with a prompt under it. Without a terminal (a pipe,
 // a script) it prints the report once and returns.
