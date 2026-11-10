@@ -18,15 +18,19 @@ import (
 // the report is drawn again.
 
 const usageShellHelp = `Lệnh gõ ở dòng dưới (không cần gõ "wj usage"):
-  1 2 3 4 5 6                                          nhảy tới kỳ có số đó trong bảng "Các kỳ"
-  today  yesterday  week  lastweek  month  lastmonth   đổi kỳ (tuần bắt đầu thứ Hai)
+  1 2 3  hoặc  day  week  month                       xem theo ngày / tuần / tháng (tuần bắt đầu thứ Hai)
+  prev  next  (hoặc <  >)                              kỳ trước / kỳ sau cùng loại
+  today  yesterday  lastweek  lastmonth  2026-W45      tới thẳng một kỳ
   7d  30d                                              N ngày gần nhất
   2026-11-09   2026-11   2026-11-01..2026-11-09        một ngày, một tháng, một khoảng ngày
   agents  /  agents off                                bật/tắt liệt kê từng worker dưới session
   open  /  open off                                    chỉ các phiên đang mở lúc này (Claude Code): ● bận, ○ rảnh
-  top 30  /  top 0  /  top auto                        số session hiện ra (0 = tất cả)
+  analytics  /  analytics off                          phân tích token đi đâu, vì sao tốn (theo kỳ đang xem)
+  blocks  /  blocks off                                khối 5 giờ (như gói Claude tính): tốc độ đốt, dự kiến hết khối
+  limit 5M  /  limit max  /  limit off                 giới hạn token một khối, cảnh báo từ 80%
+  top 30  /  top 0  /  top auto                       số session hiện ra (0 = tất cả)
   project TÊN  /  project all                          lọc theo project
-  app claude  /  app codex  /  app opencode  /  app all   lọc theo app
+  app claude / codex / opencode / antigravity / all    lọc theo app
   reset                                                về mặc định (hôm nay, không lọc)
   help                                                 xem lại bảng này
   q  hoặc  0  hoặc Enter                               thoát`
@@ -51,9 +55,24 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 	case "reset":
 		*v = usageView{Spec: "today", Top: -1, Overview: v.Overview}
 		return "", false
-	case "1", "2", "3", "4", "5", "6": // the numbers of the overview table
-		n, _ := strconv.Atoi(cmd)
-		v.Spec = overviewSpecs[n-1]
+	case "1", "2", "3", "day", "week", "month": // a kind of period, around the day in view
+		u := map[string]periodUnit{"1": unitDay, "2": unitWeek, "3": unitMonth, "day": unitDay, "week": unitWeek, "month": unitMonth}[cmd]
+		spec, err := specOfUnit(v.Spec, u, now)
+		if err != nil {
+			spec = u.command()
+		}
+		v.Spec = spec
+		return "", false
+	case "prev", "next", "<", ">":
+		dir := 1
+		if cmd == "prev" || cmd == "<" {
+			dir = -1
+		}
+		spec, ok := shiftSpec(v.Spec, dir, now)
+		if !ok {
+			return "đang xem kỳ mới nhất, không có kỳ sau", false
+		}
+		v.Spec = spec
 		return "", false
 	case "open", "live", "running":
 		switch strings.ToLower(arg) {
@@ -63,6 +82,35 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 			v.Open = false
 		default:
 			return "open on hoặc open off", false
+		}
+		return "", false
+	case "analytics", "analyze", "why":
+		switch strings.ToLower(arg) {
+		case "", "on", "yes", "y":
+			v.Analytics, v.Blocks = true, false
+		case "off", "no", "n":
+			v.Analytics = false
+		default:
+			return "analytics on hoặc analytics off", false
+		}
+		return "", false
+	case "blocks", "block":
+		switch strings.ToLower(arg) {
+		case "", "on", "yes", "y":
+			v.Blocks, v.Analytics = true, false
+		case "off", "no", "n":
+			v.Blocks = false
+		default:
+			return "blocks on hoặc blocks off", false
+		}
+		return "", false
+	case "limit":
+		if _, err := blockLimit(arg, nil); err != nil {
+			return "limit 5M, limit max hoặc limit off", false
+		}
+		v.Limit = strings.ToLower(strings.TrimSpace(arg))
+		if v.Limit == "off" || v.Limit == "0" {
+			v.Limit = ""
 		}
 		return "", false
 	case "agents", "agent", "workers":
@@ -98,10 +146,10 @@ func applyUsageCommand(v *usageView, line string, now time.Time) (message string
 		switch strings.ToLower(arg) {
 		case "", "all":
 			v.Client = ""
-		case "claude", "codex", "opencode":
+		case "claude", "codex", "opencode", "antigravity":
 			v.Client = strings.ToLower(arg)
 		default:
-			return "app claude, codex, opencode hoặc all", false
+			return "app claude, codex, opencode, antigravity hoặc all", false
 		}
 		return "", false
 	}
@@ -124,16 +172,25 @@ func usageFooter(v usageView) string {
 	if v.Agents {
 		state = append(state, "agents: bật")
 	}
+	if v.Blocks {
+		state = append(state, "khối 5 giờ")
+	}
+	if v.Analytics {
+		state = append(state, "phân tích")
+	}
+	if v.Limit != "" {
+		state = append(state, "limit: "+v.Limit)
+	}
 	switch {
 	case v.Top == 0:
 		state = append(state, "top: tất cả")
 	case v.Top > 0:
 		state = append(state, fmt.Sprintf("top: %d", v.Top))
 	}
-	return strings.Join(state, " · ") + "   —   gõ: 1-6 hoặc tên kỳ, 2026-11-05, agents, top 30, project TÊN, help, q"
+	return strings.Join(state, " · ") + "   —   gõ: day/week/month, prev/next, 2026-11-05, agents, top 30, project TÊN, help, q"
 }
 
-var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex|opencode]; kỳ: " + periodHelp)
+var errPeriodUsage = errors.New("cách dùng: wj usage [kỳ] [-top N] [-agents] [-project TÊN] [-app claude|codex|opencode|antigravity] [-json]; wj usage blocks [kỳ] [-limit 5M]; wj usage analytics [kỳ]; kỳ: " + periodHelp)
 
 // runUsageShell shows the report with a prompt under it. Without a terminal (a pipe,
 // a script) it prints the report once and returns.

@@ -464,7 +464,8 @@ func TestReportTextShrinksTheSessionListToFitTheScreen(t *testing.T) {
 	_ = body
 }
 
-func TestPeriodOverviewCountsEverySixPeriodsInOnePass(t *testing.T) {
+func periodFixture(t *testing.T) (*sessionScanner, time.Time) {
+	t.Helper()
 	s, home := testScanner(t)
 	// "now" is Monday 2026-11-09 12:00 local (UTC+7).
 	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "a.jsonl"),
@@ -473,91 +474,158 @@ func TestPeriodOverviewCountsEverySixPeriodsInOnePass(t *testing.T) {
 			claudeLine("l1", "/w/tool", "2026-11-04T01:00:00Z", 10, 0, 0, 0)+ // last week, this month
 			claudeLine("m1", "/w/tool", "2026-10-20T01:00:00Z", 1, 0, 0, 0)) // last month
 	s.scan(time.Time{})
-	now := time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
+	return s, time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
+}
+
+func TestPeriodOverviewShowsTheDayWeekAndMonthOfTheView(t *testing.T) {
+	s, now := periodFixture(t)
 	rows := s.periodOverview(usageView{Spec: "today"}, now)
-	if len(rows) != 6 {
+	if len(rows) != 3 {
 		t.Fatalf("rows = %d", len(rows))
 	}
-	want := map[string]int64{"today": 1000, "yesterday": 100, "week": 1000, "lastweek": 110, "month": 1110, "lastmonth": 1}
-	for _, r := range rows {
-		if r.Total != want[r.Spec] {
-			t.Errorf("%s total = %d, want %d", r.Spec, r.Total, want[r.Spec])
+	for i, want := range []struct {
+		spec  string
+		total int64
+	}{{"today", 1000}, {"week", 1000}, {"month", 1110}} {
+		if rows[i].Spec != want.spec || rows[i].Total != want.total || rows[i].Key != fmt.Sprint(i+1) {
+			t.Errorf("row %d = %s %d, want %s %d", i, rows[i].Spec, rows[i].Total, want.spec, want.total)
 		}
 	}
-	if !rows[0].Current || rows[1].Current || rows[0].Key != "1" || rows[5].Key != "6" {
-		t.Errorf("only the viewed period is marked, keys run 1-6: %+v", rows)
+	if !rows[0].Current || rows[1].Current || rows[2].Current {
+		t.Errorf("only the day is current: %+v", rows)
 	}
-	if rows[3].Sessions != 1 {
-		t.Errorf("sessions of last week = %d", rows[3].Sessions)
+	// An older day: the rows follow it to its own week and month.
+	rows = s.periodOverview(usageView{Spec: "2026-10-20", Project: "tool"}, now)
+	if rows[0].Spec != "2026-10-20" || rows[1].Spec != "2026-W43" || rows[2].Spec != "lastmonth" || rows[2].Total != 1 {
+		t.Errorf("rows of an old day = %+v", rows)
 	}
-}
-
-func TestPeriodOverviewFollowsFiltersAndAddsTheTypedPeriod(t *testing.T) {
-	s, home := testScanner(t)
-	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "a.jsonl"),
-		claudeLine("t1", "/w/game", "2026-11-09T01:00:00Z", 1000, 0, 0, 0)+claudeLine("t2", "/w/tool", "2026-11-09T01:00:00Z", 5, 0, 0, 0)+
-			claudeLine("d1", "/w/tool", "2026-11-05T01:00:00Z", 7, 0, 0, 0))
-	s.scan(time.Time{})
-	now := time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
-	rows := s.periodOverview(usageView{Spec: "2026-11-05", Project: "tool"}, now)
-	if len(rows) != 7 || rows[6].Spec != "2026-11-05" || !rows[6].Current || rows[6].Key != "-" || rows[6].Total != 7 {
-		t.Fatalf("a typed period gets its own current row: %+v", rows[6])
-	}
-	if rows[0].Total != 5 || rows[0].Current {
-		t.Errorf("today for project tool = %+v", rows[0])
-	}
-	if rows := s.periodOverview(usageView{Spec: "ThisWeek"}, now); len(rows) != 6 || !rows[2].Current {
-		t.Errorf("thisweek is the week row: %+v", rows)
+	rows = s.periodOverview(usageView{Spec: "lastweek"}, now)
+	if !rows[1].Current || rows[1].Total != 110 || rows[0].Spec != "2026-11-02" {
+		t.Errorf("last week is the week row, its first day the day row: %+v", rows)
 	}
 }
 
-func TestReportTextStartsWithTheOverviewAndReachesBackToLastMonth(t *testing.T) {
-	s, home := testScanner(t)
-	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "now.jsonl"), claudeLine("t1", "/w/game", "2026-11-09T01:00:00Z", 100, 0, 0, 0))
-	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "old.jsonl"), claudeLine("o1", "/w/game", "2026-10-15T01:00:00Z", 900, 0, 0, 0))
-	now := time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
-	text, err := reportText(s, usageView{Spec: "today", Top: -1, Overview: true}, now, 0, time.Time{})
+func TestPeriodOverviewAddsARowForATypedRange(t *testing.T) {
+	s, now := periodFixture(t)
+	rows := s.periodOverview(usageView{Spec: "7d"}, now)
+	if len(rows) != 4 || rows[3].Spec != "7d" || !rows[3].Current || rows[3].Key != "-" || rows[3].Total != 1110 {
+		t.Fatalf("a typed range gets its own current row: %+v", rows)
+	}
+	if rows[0].Current || rows[1].Current || rows[2].Current {
+		t.Errorf("no kind is current for a range")
+	}
+}
+
+func TestReportTextStartsWithTheOverviewAndAChart(t *testing.T) {
+	s, now := periodFixture(t)
+	text, err := reportText(s, usageView{Spec: "week", Top: -1, Overview: true, Width: 120}, now, 0, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(text, "Các kỳ") || strings.Index(text, "Các kỳ") > strings.Index(text, "Token hôm nay") {
-		t.Errorf("the overview comes first:\n%s", text)
+	if !strings.HasPrefix(text, "Các kỳ") || strings.Index(text, "Token theo tuần") > strings.Index(text, "Token tuần này") {
+		t.Errorf("the overview and the chart come first:\n%s", text)
 	}
-	for _, want := range []string{"1 today", "2 yesterday", "3 week", "4 lastweek", "5 month", "6 lastmonth", "tháng trước", "▶"} {
+	for _, want := range []string{"1 day", "2 week", "3 month", "Token theo tuần", "W45", "W46", "▲", "█", "110"} {
 		if !strings.Contains(text, want) {
-			t.Errorf("overview lacks %q:\n%s", want, text)
+			t.Errorf("report lacks %q:\n%s", want, text)
 		}
 	}
-	// The October call is in the last-month row although the view is today.
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "lastmonth") && !strings.Contains(line, "900") {
-			t.Errorf("last month row should show 900 tokens: %q", line)
+	chart := text[:strings.Index(text, "Token tuần này")]
+	for _, line := range strings.Split(chart, "\n") {
+		if n := len([]rune(line)); n > 120 {
+			t.Errorf("a chart line is %d wide: %q", n, line)
 		}
+	}
+	days, _ := reportText(s, usageView{Spec: "today", Top: -1, Overview: true, Width: 120}, now, 0, time.Time{})
+	if !strings.Contains(days, "Token theo ngày") || !strings.Contains(days, "09/11") {
+		t.Errorf("a day shows the chart of days:\n%s", days)
 	}
 	plain, _ := reportText(s, usageView{Spec: "today", Top: -1}, now, 0, time.Time{})
-	if strings.Contains(plain, "Các kỳ") {
+	if strings.Contains(plain, "Các kỳ") || strings.Contains(plain, "Token theo") {
 		t.Errorf("no overview unless asked: %s", plain)
 	}
 }
 
-func TestOverviewNumbersJumpToThePeriod(t *testing.T) {
+func TestUnitSeriesCountsEachPeriod(t *testing.T) {
+	s, now := periodFixture(t)
+	first := time.Date(2026, 10, 1, 0, 0, 0, 0, testZone)
+	if got := s.unitSeries(unitMonth, first, 2, "", ""); got[0] != 1 || got[1] != 1110 {
+		t.Errorf("months = %v", got)
+	}
+	weeks := s.unitSeries(unitWeek, weekStart(midnight(now)).AddDate(0, 0, -21), 4, "", "")
+	if weeks[0] != 1 || weeks[2] != 110 || weeks[3] != 1000 {
+		t.Errorf("weeks = %v", weeks)
+	}
+}
+
+func TestDayWeekMonthAndArrowsMoveThePeriod(t *testing.T) {
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
 	v := usageView{Spec: "today", Top: -1, Overview: true, Project: "game"}
-	for n, want := range map[string]string{"1": "today", "2": "yesterday", "3": "week", "4": "lastweek", "5": "month", "6": "lastmonth"} {
-		if msg, quit := applyUsageCommand(&v, n, now); msg != "" || quit || v.Spec != want || v.Project != "game" || !v.Overview {
-			t.Errorf("%s: spec = %q, msg = %q, quit = %v, view = %+v", n, v.Spec, msg, quit, v)
+	start := func() time.Time {
+		p, err := resolvePeriod(v.Spec, now)
+		if err != nil {
+			t.Fatalf("%q: %v", v.Spec, err)
+		}
+		return p.Start
+	}
+	d := func(m, day int) time.Time { return time.Date(2026, time.Month(m), day, 0, 0, 0, 0, testZone) }
+	steps := []struct {
+		line  string
+		spec  string
+		start time.Time
+	}{
+		{"prev", "yesterday", d(11, 8)},
+		{"next", "today", d(11, 9)},
+		{"2", "week", d(11, 9)},
+		{"prev", "lastweek", d(11, 2)},
+		{"<", "", d(10, 26)},
+		{"day", "2026-10-26", d(10, 26)},
+		{"next", "2026-10-27", d(10, 27)},
+		{"month", "lastmonth", d(10, 1)},
+		{">", "month", d(11, 1)},
+		{"1", "today", d(11, 9)},
+	}
+	for _, step := range steps {
+		if msg, quit := applyUsageCommand(&v, step.line, now); msg != "" || quit {
+			t.Fatalf("%s: msg = %q", step.line, msg)
+		}
+		if (step.spec != "" && v.Spec != step.spec) || !start().Equal(step.start) || v.Project != "game" {
+			t.Errorf("%s: spec %q starts %v, want %q %v", step.line, v.Spec, start(), step.spec, step.start)
 		}
 	}
-	if msg, _ := applyUsageCommand(&v, "7", now); !strings.Contains(msg, "không hiểu") {
-		t.Errorf("7 is not a period: %q", msg)
+	if msg, _ := applyUsageCommand(&v, "next", now); !strings.Contains(msg, "mới nhất") || v.Spec != "today" {
+		t.Errorf("there is nothing after today: %q %q", msg, v.Spec)
+	}
+	v.Spec = "7d"
+	applyUsageCommand(&v, "prev", now)
+	if v.Spec != "2026-10-27..2026-11-02" {
+		t.Errorf("a range steps by its own length: %q", v.Spec)
+	}
+	if msg, _ := applyUsageCommand(&v, "4", now); !strings.Contains(msg, "không hiểu") {
+		t.Errorf("4 is not a period: %q", msg)
 	}
 	if _, quit := applyUsageCommand(&v, "0", now); !quit {
 		t.Error("0 still quits")
 	}
+	applyUsageCommand(&v, "open", now)
 	applyUsageCommand(&v, "reset", now)
-	if v.Spec != "today" || v.Project != "" || !v.Overview {
-		t.Errorf("reset keeps the overview on: %+v", v)
+	if v.Open || v.Spec != "today" || v.Project != "" || !v.Overview {
+		t.Errorf("reset: %+v", v)
+	}
+}
+
+func TestISOWeekSpec(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, testZone)
+	for spec, want := range map[string]string{"2026-W46": "2026-11-09", "2026-w01": "2025-12-29", "2020-W53": "2020-12-28"} {
+		p, err := resolvePeriod(spec, now)
+		if err != nil || p.Start.Format("2006-01-02") != want || unitOf(p) != unitWeek {
+			t.Errorf("%s = %v (%v), want %s", spec, p.Start, err, want)
+		}
+	}
+	for _, bad := range []string{"2026-W54", "2026-W0", "2026-W1"} {
+		if _, err := resolvePeriod(bad, now); err == nil {
+			t.Errorf("%s should not parse", bad)
+		}
 	}
 }
 

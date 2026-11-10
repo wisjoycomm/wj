@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"io"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -62,7 +61,7 @@ func sameProcess(m sessionMarker) bool {
 // refreshLive reads the markers again. It is cheap: a few small files and a process
 // check each.
 func (s *sessionScanner) refreshLive() {
-	paths, _ := filepath.Glob(filepath.Join(s.claudeDir, "sessions", "*.json"))
+	paths := s.claudeSessionMarkers()
 	var live []liveSession
 	for _, path := range paths {
 		data, err := os.ReadFile(path)

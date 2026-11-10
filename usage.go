@@ -46,6 +46,10 @@ type sessionCall struct {
 	Agent   string // the subagent's own id when Sub is set
 	// Context is the prompt size of this call; every call reads it again.
 	Context int64
+	// Tools are the tools this reply called (Read, Bash, exec_command...), and Thinking
+	// the part of Output spent on thinking or reasoning. Both feed wj usage analytics.
+	Tools    []string
+	Thinking int64
 }
 
 type sessionFile struct {
@@ -53,16 +57,19 @@ type sessionFile struct {
 	cwd, model string
 	hasRecords bool
 	lastTotal  codexTokens
+	tools      []string // Codex: tools called since the last token record
+	lastCtx    int64    // Codex: prompt size of the last call, the size a compaction starts from
 }
 
 type sessionScanner struct {
-	claudeDir, codexDir string
-	files               map[string]*sessionFile
-	index               map[string]int
-	calls               []sessionCall
-	projects            map[string]string
-	titles              map[string]string    // session id -> the title Claude Code gave the chat
-	agents              map[string]agentMeta // session id + "/" + agent id -> what the subagent was asked to do
+	claudeDirs []string // Claude Code config folders, each with projects/ and sessions/
+	codexDir   string
+	files      map[string]*sessionFile
+	index      map[string]int
+	calls      []sessionCall
+	projects   map[string]string
+	titles     map[string]string    // session id -> the title Claude Code gave the chat
+	agents     map[string]agentMeta // session id + "/" + agent id -> what the subagent was asked to do
 	// OpenCode keeps everything in one SQLite file.
 	openCodeDB     string
 	openCodeNewest int64     // time_created (ms) of the newest row read
@@ -72,6 +79,13 @@ type sessionScanner struct {
 	live      []liveSession
 	liveByID  map[string]liveSession
 	liveStamp uint32 // changes when a session opens, closes or switches busy/idle
+	// Antigravity keeps one SQLite file per conversation (see usage_antigravity.go).
+	antigravityRoots []string
+	antigravitySeen  map[string]time.Time // database path -> its modification time at the last read
+	antigravityKeys  map[string]string    // identity of a call -> the key it was recorded under
+	antigravityExact map[string]bool      // key -> its time was written with the call
+	// Times a session's context was summarised to make room (see usage_analytics.go).
+	compactions map[string]compaction // the line's uuid -> the event, so copies count once
 }
 
 // agentMeta is what Claude Code writes next to a subagent's transcript.
@@ -81,30 +95,80 @@ type agentMeta struct {
 }
 
 func newSessionScanner(home string) *sessionScanner {
-	claudeDir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if claudeDir == "" {
-		claudeDir = filepath.Join(home, ".claude")
-	}
 	return &sessionScanner{
-		claudeDir:  claudeDir,
-		codexDir:   filepath.Dir(codexConfigPath(home)),
-		openCodeDB: openCodeDB(home),
-		files:      map[string]*sessionFile{},
-		index:      map[string]int{},
-		projects:   map[string]string{},
-		titles:     map[string]string{},
-		agents:     map[string]agentMeta{},
+		claudeDirs:       claudeDataDirs(home),
+		codexDir:         filepath.Dir(codexConfigPath(home)),
+		openCodeDB:       openCodeDB(home),
+		antigravityRoots: antigravityRoots(home),
+		antigravitySeen:  map[string]time.Time{},
+		antigravityKeys:  map[string]string{},
+		antigravityExact: map[string]bool{},
+		files:            map[string]*sessionFile{},
+		index:            map[string]int{},
+		projects:         map[string]string{},
+		titles:           map[string]string{},
+		agents:           map[string]agentMeta{},
+		compactions:      map[string]compaction{},
 	}
 }
 
 // scan reads only what was appended since the last scan. Files untouched since
 // `since` cannot hold calls in that window and are skipped.
 func (s *sessionScanner) scan(since time.Time) {
-	s.scanTree(filepath.Join(s.claudeDir, "projects"), since, s.readClaudeLine)
+	for _, dir := range s.claudeDirs {
+		s.scanTree(filepath.Join(dir, "projects"), since, s.readClaudeLine)
+	}
 	for _, dir := range []string{"sessions", "archived_sessions"} {
 		s.scanTree(filepath.Join(s.codexDir, dir), since, s.readCodexLine)
 	}
 	s.scanOpenCode(since)
+	s.scanAntigravity(since)
+}
+
+// claudeDataDirs are the Claude Code config folders to read, as ccusage finds them:
+// every folder of CLAUDE_CONFIG_DIR (comma-separated; a path ending in projects means
+// its parent), else $XDG_CONFIG_HOME/claude (~/.config/claude) and ~/.claude.
+func claudeDataDirs(home string) []string {
+	var dirs []string
+	add := func(dir string) {
+		dir = filepath.Clean(dir)
+		if filepath.Base(dir) == "projects" {
+			dir = filepath.Dir(dir)
+		}
+		for _, d := range dirs {
+			if strings.EqualFold(d, dir) {
+				return
+			}
+		}
+		dirs = append(dirs, dir)
+	}
+	if env := os.Getenv("CLAUDE_CONFIG_DIR"); strings.TrimSpace(env) != "" {
+		for _, dir := range strings.Split(env, ",") {
+			if dir = strings.TrimSpace(dir); dir != "" {
+				add(dir)
+			}
+		}
+		return dirs
+	}
+	config := os.Getenv("XDG_CONFIG_HOME")
+	if config == "" {
+		config = filepath.Join(home, ".config")
+	}
+	if info, err := os.Stat(filepath.Join(config, "claude", "projects")); err == nil && info.IsDir() {
+		add(filepath.Join(config, "claude"))
+	}
+	add(filepath.Join(home, ".claude"))
+	return dirs
+}
+
+// claudeSessionMarkers are the per-process markers of every Claude Code folder.
+func (s *sessionScanner) claudeSessionMarkers() []string {
+	var paths []string
+	for _, dir := range s.claudeDirs {
+		found, _ := filepath.Glob(filepath.Join(dir, "sessions", "*.json"))
+		paths = append(paths, found...)
+	}
+	return paths
 }
 
 func (s *sessionScanner) scanTree(root string, since time.Time, parse func(string, *sessionFile, []byte)) {
@@ -171,6 +235,9 @@ func (s *sessionScanner) readClaudeLine(path string, state *sessionFile, raw []b
 		}
 		return
 	}
+	if bytes.Contains(raw, []byte(`"subtype":"compact_boundary"`)) && s.readClaudeCompaction(path, raw) {
+		return
+	}
 	if !bytes.Contains(raw, []byte(`"usage"`)) {
 		return
 	}
@@ -191,7 +258,16 @@ func (s *sessionScanner) readClaudeLine(path string, state *sessionFile, raw []b
 				Creation   struct {
 					OneHour int64 `json:"ephemeral_1h_input_tokens"`
 				} `json:"cache_creation"`
+				Details struct {
+					Thinking int64 `json:"thinking_tokens"`
+				} `json:"output_tokens_details"`
 			} `json:"usage"`
+			// Claude Code writes one line per content block of a reply, each with the
+			// same usage; the tool_use blocks name the tools the reply called.
+			Content []struct {
+				Type string `json:"type"`
+				Name string `json:"name"`
+			} `json:"content"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(raw, &line) != nil || line.Type != "assistant" {
@@ -219,11 +295,21 @@ func (s *sessionScanner) readClaudeLine(path string, state *sessionFile, raw []b
 			s.agents[id+"/"+agent] = readAgentMeta(path)
 		}
 	}
+	var tools []string
+	if i, ok := s.index["claude\x00"+key]; ok {
+		tools = s.calls[i].Tools
+	}
+	for _, block := range line.Message.Content {
+		if block.Type == "tool_use" && block.Name != "" && !containsName(tools, block.Name) {
+			tools = append(tools[:len(tools):len(tools)], block.Name)
+		}
+	}
 	s.record("claude\x00"+key, sessionCall{
 		When: when, Project: s.projectOf(line.Cwd), App: "claude", Model: line.Message.Model,
 		Input: usage.Input, Output: usage.Output, CacheRead: usage.CacheRead, CacheWrite: usage.CacheWrite,
 		CacheWrite1h: usage.Creation.OneHour,
 		Session:      id, Sub: sub, Agent: agent, Context: usage.Input + usage.CacheRead + usage.CacheWrite,
+		Tools: tools, Thinking: usage.Details.Thinking,
 	})
 }
 
@@ -262,9 +348,19 @@ type codexTokens struct {
 	Cached     int64 `json:"cached_input_tokens"`
 	CacheWrite int64 `json:"cache_write_input_tokens"`
 	Output     int64 `json:"output_tokens"`
+	Reasoning  int64 `json:"reasoning_output_tokens"`
 }
 
 func (s *sessionScanner) readCodexLine(path string, state *sessionFile, raw []byte) {
+	if bytes.Contains(raw, []byte(`"type":"compacted"`)) && s.readCodexCompaction(path, state, raw) {
+		return
+	}
+	if name := codexToolOf(raw); name != "" {
+		if !containsName(state.tools, name) {
+			state.tools = append(state.tools, name)
+		}
+		return
+	}
 	if !bytes.Contains(raw, []byte(`"session_meta"`)) && !bytes.Contains(raw, []byte(`"turn_context"`)) &&
 		!bytes.Contains(raw, []byte(`"token_usage_record"`)) && !bytes.Contains(raw, []byte(`"token_count"`)) {
 		return
@@ -308,7 +404,7 @@ func (s *sessionScanner) readCodexLine(path string, state *sessionFile, raw []by
 		// Older Codex builds only write a running total.
 		total := payload.Info.Total
 		diff := codexTokens{total.Input - state.lastTotal.Input, total.Cached - state.lastTotal.Cached,
-			total.CacheWrite - state.lastTotal.CacheWrite, total.Output - state.lastTotal.Output}
+			total.CacheWrite - state.lastTotal.CacheWrite, total.Output - state.lastTotal.Output, total.Reasoning - state.lastTotal.Reasoning}
 		if diff.Input > 0 || diff.Output > 0 {
 			state.lastTotal = total
 			s.record("codex\x00"+path+"\x00"+line.Timestamp, s.codexCall(path, state, when, diff))
@@ -324,9 +420,45 @@ func (s *sessionScanner) codexCall(path string, state *sessionFile, when time.Ti
 		input = 0
 	}
 	id, _ := sessionOf(path)
+	tools := state.tools
+	state.tools = nil
+	state.lastCtx = input + t.Cached + t.CacheWrite
 	return sessionCall{When: when, Project: s.projectOf(state.cwd), App: "codex", Model: state.model,
 		Input: input, Output: t.Output, CacheRead: t.Cached, CacheWrite: t.CacheWrite,
-		Session: id, Context: input + t.Cached + t.CacheWrite}
+		Session: id, Context: input + t.Cached + t.CacheWrite, Tools: tools, Thinking: t.Reasoning}
+}
+
+// codexToolOf is the tool a Codex response_item line calls, or "". The tool calls of a
+// response come just before its token record. The bytes are checked first: the outputs
+// of tools are big and are never parsed.
+func codexToolOf(raw []byte) string {
+	kind := ""
+	for _, k := range []string{"function_call", "custom_tool_call", "web_search_call", "local_shell_call"} {
+		if bytes.Contains(raw, []byte(`{"type":"`+k+`"`)) {
+			kind = k
+			break
+		}
+	}
+	if kind == "" {
+		return ""
+	}
+	var line struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"payload"`
+	}
+	if json.Unmarshal(raw, &line) != nil || line.Type != "response_item" || line.Payload.Type != kind {
+		return ""
+	}
+	switch {
+	case line.Payload.Name != "":
+		return line.Payload.Name
+	case kind == "web_search_call":
+		return "web_search"
+	}
+	return "shell"
 }
 
 func (s *sessionScanner) projectOf(cwd string) string {
@@ -468,27 +600,45 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 	all := flags.Bool("all", false, "toàn bộ phiên còn lưu trên máy")
 	by := flags.String("by", "project-app", "gom theo: project, project-app, project-model, app (app + model), model")
 	project := flags.String("project", "", "chỉ tính một project")
-	client := flags.String("app", "", "chỉ tính một app: claude, codex, opencode")
+	client := flags.String("app", "", "chỉ tính một app: claude, codex, opencode, antigravity")
 	top := flags.Int("top", -1, "số session liệt kê khi xem theo ngày/tuần/tháng (0 = tất cả; mặc định 20, một ngày thì tất cả)")
 	agents := flags.Bool("agents", false, "liệt kê từng worker (subagent) dưới session của nó, khi xem theo ngày/tuần/tháng")
-	// A period (today, week, 2026-11-09...) may come before or after the flags.
-	period, rest := "", args
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		period, rest = args[0], args[1:]
+	limit := flags.String("limit", "", "với blocks: giới hạn token của một khối 5 giờ, ví dụ 5M, hoặc max (khối lớn nhất trước đó)")
+	asJSON := flags.Bool("json", false, "in JSON (cho script, status line) thay vì bảng")
+	// `wj usage blocks [period]`: 5-hour blocks instead of sessions.
+	blocks := len(args) > 0 && strings.EqualFold(args[0], "blocks")
+	// `wj usage analytics [period]`: where the tokens went and why.
+	analytics := len(args) > 0 && strings.EqualFold(args[0], "analytics")
+	if blocks || analytics {
+		args = args[1:]
 	}
-	if err := flags.Parse(rest); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
+	// A period (today, week, 2026-11-09...) may come before, between or after the flags.
+	var words []string
+	for rest := args; ; {
+		if err := flags.Parse(rest); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
+			return err
 		}
-		return err
+		if flags.NArg() == 0 {
+			break
+		}
+		words, rest = append(words, flags.Arg(0)), flags.Args()[1:]
 	}
-	if period == "" && flags.NArg() == 1 {
-		period = flags.Arg(0)
-	} else if flags.NArg() != 0 {
+	period := ""
+	switch len(words) {
+	case 0:
+	case 1:
+		period = words[0]
+	default:
 		return errPeriodUsage
 	}
 	// No period and no other option: the report with a prompt below it. A period or
 	// any option keeps the plain output that scripts rely on.
+	if (blocks || analytics) && period == "" {
+		period = "today"
+	}
 	if period == "" && flags.NFlag() == 0 {
 		period = "today"
 		home, err := os.UserHomeDir()
@@ -502,7 +652,15 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		text, err := reportText(newSessionScanner(home), usageView{Spec: period, Project: *project, Client: *client, Top: *top, Agents: *agents}, time.Now(), 0, time.Time{})
+		view := usageView{Spec: period, Project: *project, Client: *client, Top: *top, Agents: *agents, Blocks: blocks, Limit: *limit, Analytics: analytics}
+		if *asJSON {
+			result, err := periodJSON(newSessionScanner(home), view, time.Now())
+			if err != nil {
+				return err
+			}
+			return writeJSON(out, result)
+		}
+		text, err := reportText(newSessionScanner(home), view, time.Now(), 0, time.Time{})
 		if err != nil {
 			return err
 		}
@@ -531,6 +689,28 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 	scanner := newSessionScanner(home)
 	scanner.scan(since)
 	list, total := scanner.summarize(usageFilter{Since: since, Project: *project, Client: *client, GroupBy: groupBy})
+	if *asJSON {
+		type group struct {
+			Project string `json:"project,omitempty"`
+			App     string `json:"app,omitempty"`
+			Model   string `json:"model,omitempty"`
+			jsonTotals
+		}
+		groups := []group{}
+		for _, t := range list {
+			groups = append(groups, group{t.Project, t.Client, t.Model, totalsOf(t)})
+		}
+		var from *time.Time
+		if !since.IsZero() {
+			from = &since
+		}
+		return writeJSON(out, struct {
+			Since  *time.Time `json:"since,omitempty"`
+			By     string     `json:"by"`
+			Totals jsonTotals `json:"totals"`
+			Groups []group    `json:"groups"`
+		}{from, *by, totalsOf(total), groups})
+	}
 	fmt.Fprintf(out, "Token đã dùng (%s; mọi agent đọc được trên máy này)\n\n", label)
 	if total.Calls == 0 {
 		fmt.Fprintln(out, "Không có lượt gọi nào trong khoảng này.")
@@ -646,7 +826,7 @@ func windowTag(d time.Duration) string {
 // openClaudeProjects reads Claude Code's per-process session markers, so an idle
 // session still counts as open. Codex has no such marker and is seen by activity.
 func (s *sessionScanner) openClaudeProjects() []string {
-	paths, _ := filepath.Glob(filepath.Join(s.claudeDir, "sessions", "*.json"))
+	paths := s.claudeSessionMarkers()
 	var open []string
 	for _, path := range paths {
 		data, err := os.ReadFile(path)

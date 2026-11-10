@@ -1,7 +1,7 @@
 # Token
 
-Đọc thẳng file phiên của Claude Code, Codex và OpenCode trên máy này (Claude, Codex: file `.jsonl`;
-OpenCode: file cơ sở dữ liệu `opencode.db`). Không cần proxy, không gọi mạng, không dùng token, tính cả
+Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này (Claude, Codex: file `.jsonl`;
+OpenCode: file cơ sở dữ liệu `opencode.db`; Antigravity: một file SQLite cho mỗi cuộc trò chuyện). Không cần proxy, không gọi mạng, không dùng token, tính cả
 phiên mở từ Orca. Các worktree của một repo gộp về một project.
 
 ## Lệnh
@@ -17,6 +17,10 @@ wj usage -since 24h       bảng cũ theo project + app
 wj usage -by project-model   từng model trong mỗi project
 wj usage -by app          theo app + model; còn có -by project, -by model
 wj usage -project game -app codex
+wj usage blocks           khối 5 giờ, tốc độ đốt và dự kiến hết khối (xem "Khối 5 giờ")
+wj usage blocks -limit 5M giới hạn token một khối, cảnh báo từ 80%
+wj usage week -json       JSON thay vì bảng (xem "JSON")
+wj usage analytics week   token đi đâu, vì sao tốn (xem "Phân tích"); không ghi kỳ = hôm nay
 ```
 
 `-since 168h` đổi khoảng thời gian của bảng cũ (mặc định 24 giờ). `wj usage -all` lấy toàn bộ.
@@ -26,31 +30,32 @@ Trong menu `wj`: AI Agent → Xem token, có đủ `wj top`, mở/đóng overlay
 ## Xem theo ngày, tuần, tháng
 
 Chỉ cần gõ `wj usage`. Phía trên là báo cáo, phía dưới là danh sách lệnh (dropdown) và dòng nhập `>`, giống
-menu `/` của Claude Code. Chọn lệnh nào thì báo cáo đổi theo lệnh đó ngay, không cần gõ lại cả lệnh.
+menu `/` của Claude Code. Chỉ có ba kiểu kỳ: **ngày, tuần, tháng**. `←` `→` lùi/tiến một kỳ cùng kiểu (hôm qua, tuần
+trước, tháng trước...). Danh sách lệnh chỉ nhận phím khi bấm `Tab` để vào nó; ngoài danh sách, `↑` `↓` (và con lăn
+chuột) chỉ cuộn báo cáo, không đổi kỳ.
 
 ```text
 ... báo cáo của kỳ đang xem ...
-Lệnh   ↑↓ chọn và xem ngay · Tab điền · Enter chốt · Esc huỷ
-  ● today      hôm nay  2026-11-10 T3                              4 session · 16.5M · $13.45
-    yesterday  hôm qua  2026-11-09 T2                              19 session · 737.6M · $398
-    week       tuần này  2026-11-09 → 2026-11-15                   19 session · 754.1M · $411
-    lastweek   tuần trước  2026-11-02 → 2026-11-08                 77 session · 7.7B · $3,211
-    month      tháng này  2026-11-01 → 2026-11-30                  95 session · 8.4B · $3,644
-    lastmonth  tháng trước  2026-10-01 → 2026-10-31                76 session · 5.2B · $5,707
-    agents     liệt kê từng worker (subagent) dưới session của nó
-    top        số session hiện ra (đang: tự vừa)
-▼ còn 5 dòng nữa, bấm ↓ để xem · gõ thêm để xem kỳ khác: 2026-11-05 · 2026-11 · 14d
+Lệnh   ← → kỳ trước/sau · Tab vào danh sách · ↑↓ cuộn · Esc thoát
+  ● day      theo ngày: hôm nay  2026-11-10 T3                    7 session · 536.7M · $319
+    week     theo tuần: tuần này  2026-11-09 → 2026-11-15         9 session · 1.2B · $681
+    month    theo tháng: tháng này  2026-11-01 → 2026-11-30      66 session · 8.7B · $3,826
+    agents   liệt kê từng worker (subagent) dưới session của nó
+    open     chỉ các phiên đang mở lúc này (Claude Code), bận hay rảnh
+    top      số session hiện ra (đang: tự vừa)
+▼ còn 5 dòng nữa, bấm ↓ để xem · gõ thêm để xem kỳ khác: 2026-11-05 · 2026-W45 · 2026-11 · 14d
 > 
 ```
 
 | Phím | Tác dụng |
 |---|---|
-| `↑` `↓` | chọn lệnh trong danh sách. Báo cáo bên trên đổi sang kết quả của lệnh đó ngay (xem trước) |
+| `←` `→` | kỳ trước / kỳ sau, cùng kiểu với kỳ đang xem (ngày, tuần, tháng). Không đi quá hôm nay |
+| `Tab` | vào danh sách lệnh, đứng ở dòng đang dùng; đang ở danh sách thì điền lệnh vào dòng nhập |
+| `↑` `↓` | ngoài danh sách: cuộn báo cáo. Trong danh sách: chọn lệnh, báo cáo đổi theo ngay (xem trước) |
 | `Enter` | chốt lệnh đang chọn. Lệnh có giá trị (`top`, `project`, `app`) thì mở danh sách giá trị của nó |
-| `Tab` | điền lệnh đang chọn vào dòng nhập |
-| gõ chữ | lọc danh sách, dòng đầu tự được chọn: gõ `la` còn `lastweek`, `lastmonth` |
-| `Esc` | bỏ xem trước; bấm tiếp thì xoá dòng nhập; bấm tiếp nữa thì thoát |
-| `PgUp` `PgDn` `Home` `End` | cuộn báo cáo khi dài hơn màn hình |
+| gõ chữ | vào danh sách và lọc nó, dòng đầu tự được chọn: gõ `la` còn `lastweek`, `lastmonth` |
+| `Esc` | rời danh sách; bấm tiếp thì xoá dòng nhập; bấm tiếp nữa thì thoát |
+| `PgUp` `PgDn` `Home` `End` | cuộn báo cáo theo trang khi dài hơn màn hình |
 | `Ctrl+U`, `Ctrl+C`, `q` | xoá dòng nhập, thoát, thoát |
 
 Dấu `●` là giá trị đang dùng, `›` là dòng đang chọn. Danh sách của `project` liệt kê đúng các project có dữ liệu trong
@@ -60,38 +65,53 @@ kỳ đang xem, kèm dung lượng và ≈USD của từng project. Thoát xong,
 Màn hình này cần terminal đủ lớn (từ 70 cột và 16 dòng). Nhỏ hơn hoặc terminal không hỗ trợ thì `wj usage` quay về
 kiểu gõ lệnh từng dòng như trước. Lần mở đầu tiên đọc cả tháng nên mất vài giây; mỗi lần bấm phím sau đó khoảng 0.1 giây.
 
-Đầu báo cáo có bảng **Các kỳ**: sáu kỳ cạnh nhau (hôm nay, hôm qua, tuần này, tuần trước, tháng này, tháng trước)
-với số session, lượt, token và ≈USD, kỳ đang xem đánh dấu `▶`. Bảng đi theo bộ lọc `project`/`app` đang chọn. Kỳ gõ
-tay (`2026-11-05`, `7d`...) tự thêm một dòng riêng.
+Đầu báo cáo có bảng **Các kỳ**: ngày, tuần và tháng chứa kỳ đang xem (đang xem hôm nay thì là hôm nay, tuần này,
+tháng này; lùi về 2026-10-20 thì là ngày đó, tuần W43, tháng 10), với số session, lượt, token và ≈USD; kỳ đang xem
+đánh dấu `▶`. Bảng đi theo bộ lọc `project`/`app` đang chọn. Kỳ gõ tay không phải ngày/tuần/tháng (`7d`, một khoảng
+ngày) tự thêm một dòng riêng.
+
+Dưới bảng là **biểu đồ cột** token của các kỳ cùng kiểu quanh kỳ đang xem: 14 ngày, các tuần hay các tháng gần
+nhất (rộng màn hình thì nhiều cột hơn), cột của kỳ đang xem có `▲` bên dưới. Các kỳ trống ở đầu (trước khi có phiên
+nào trên máy) được bỏ bớt.
 
 ```text
-Các kỳ (gõ số hoặc tên kỳ để chuyển; ▶ là kỳ đang xem):
-   KỲ           TÊN          NGÀY                     SESSION   LƯỢT    TỔNG  QUY ĐỔI
-▶  1 today      hôm nay      2026-11-09 T2                 19   4982  731.8M     $396
-   2 yesterday  hôm qua      2026-11-08 CN                  -      -       -        -
-   3 week       tuần này     2026-11-09 → 2026-11-15       19   4982  731.8M     $396
-   4 lastweek   tuần trước   2026-11-02 → 2026-11-08       77  40658    7.7B   $3,211
-   5 month      tháng này    2026-11-01 → 2026-11-30       95  45809    8.4B   $3,628
-   6 lastmonth  tháng trước  2026-10-01 → 2026-10-31       76  31514    5.2B   $5,707
+Các kỳ (1 2 3 hoặc day/week/month để đổi; ← → kỳ trước/sau; ▶ là kỳ đang xem):
+   KỲ       TÊN        NGÀY                     SESSION   LƯỢT    TỔNG  QUY ĐỔI
+   1 day    hôm nay    2026-11-10 T3                  7   4787  536.7M     $319
+▶  2 week   tuần này   2026-11-09 → 2026-11-15        9   9436    1.2B     $681
+   3 month  tháng này  2026-11-01 → 2026-11-30       66  49524    8.7B   $3,826
+
+Token theo tuần (← → xem tuần trước/sau; ▲ là kỳ đang xem):
+ 228.5M  176.6M   3.0B    1.9B    7.5B    1.2B
+                                 ██████
+                                 ██████
+                                 ██████
+         ▃▃▃▃▃▃                  ██████
+         ██████  ▃▃▃▃▃▃          ██████
+ ▁▁▁▁▁▁  ██████  ██████  ██████  ██████  ▇▇▇▇▇▇
+  W41     W42     W43     W44     W45     W46
+                                           ▲
 ```
 
-Bảng này chỉ có ở màn hình `wj usage` (không kỳ, không cờ). `wj usage week` và các lệnh có kỳ in một lần như cũ, không
-có bảng.
+Bảng và biểu đồ chỉ có ở màn hình `wj usage` (không kỳ, không cờ). `wj usage week` và các lệnh có kỳ in một lần như
+cũ, không có chúng.
 
 | Gõ ở dòng `>` | Tác dụng |
 |---|---|
-| `1`–`6` | nhảy tới kỳ có số đó trong bảng "Các kỳ" |
-| `today`, `yesterday` | hôm nay, hôm qua |
-| `week`, `lastweek` | tuần này, tuần trước; tuần bắt đầu thứ Hai |
-| `month`, `lastmonth` | tháng này, tháng trước |
-| `7d`, `30d` | N ngày gần nhất, tính cả hôm nay |
-| `2026-11-09`, `2026-11` | một ngày, một tháng |
+| `1` `2` `3`, `day` `week` `month` | xem theo ngày / tuần / tháng, giữ ngày đang xem (tuần bắt đầu thứ Hai) |
+| `prev`, `next` (hoặc `<`, `>`) | kỳ trước / kỳ sau, như `←` `→` |
+| `today`, `yesterday`, `lastweek`, `lastmonth` | tới thẳng kỳ đó |
+| `2026-11-09`, `2026-W45`, `2026-11` | một ngày, một tuần (ISO), một tháng |
+| `7d`, `30d` | N ngày gần nhất, tính cả hôm nay; `←` `→` lùi/tiến đúng N ngày |
 | `2026-11-01..2026-11-09` | khoảng ngày bất kỳ (gồm cả hai đầu) |
 | `agents` / `agents off` | bật/tắt liệt kê từng worker dưới session của nó |
 | `open` / `open off` | chỉ các phiên Claude Code đang mở lúc này (xem mục "Phiên đang mở") |
 | `top 30`, `top 0`, `top auto` | số session hiện ra (0 = tất cả, auto = vừa màn hình) |
 | `project TÊN`, `project all` | lọc theo project |
-| `app claude`, `app codex`, `app all` | lọc theo app |
+| `app claude`, `app codex`, `app opencode`, `app antigravity`, `app all` | lọc theo app |
+| `analytics` / `analytics off` | phân tích token của kỳ đang xem thay cho bảng session (xem mục "Phân tích"); ← → và day/week vẫn đổi kỳ |
+| `blocks` / `blocks off` | khối 5 giờ thay cho bảng session (xem mục "Khối 5 giờ") |
+| `limit 5M`, `limit max`, `limit off` | giới hạn token một khối |
 | `reset`, `help`, `q` | về mặc định, xem lệnh, thoát |
 
 Bảng dưới là các lệnh dùng được cả khi gõ tay ở dòng nhập (kể cả kiểu gõ từng dòng khi terminal nhỏ):
@@ -173,7 +193,7 @@ Cùng báo cáo với overlay mở rộng, thêm số lượt và cache tách đ
 - Project dùng nhiều model có thêm một dòng `└` cho mỗi model.
 - Terminal hẹp thì gộp cache thành một cột, hẹp nữa thì bỏ cột MODEL (model ghi sau `└`).
   Terminal thấp thì bớt dòng, ghi `...và N project khác`.
-- Dùng nhiều app (Claude, Codex, OpenCode) thì có thêm dòng `Theo app`.
+- Dùng nhiều app (Claude, Codex, OpenCode, Antigravity) thì có thêm dòng `Theo app`.
 
 ## Tổng cả máy
 
@@ -260,7 +280,9 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 
 - Chỉ tính được khi file phiên còn trên máy.
 - Số liệu của từng máy riêng, không cộng giữa các máy.
-- **Cursor và Antigravity chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy;  Antigravity có số trong cơ sở dữ liệu nhưng định dạng chưa có tài liệu, chưa đối chiếu được. Hai app này  không có mặt trong `wj usage` và `wj top`. Báo cáo chỉ gồm các app ghi trong dòng đầu.- App khác đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
+- **Cursor chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy, nên không có
+  mặt trong `wj usage` và `wj top`. Báo cáo chỉ gồm các app ghi trong dòng đầu.
+- App khác đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
 
 ## Phiên đang mở
 
@@ -293,3 +315,79 @@ làm việc của session; không đọc nội dung tin nhắn. Hai quy ước:
 
 Lượt lỗi hoặc bị ngắt (không có token) không được tính. Đối chiếu: `opencode stats` ghi "313 steps · 9m tokens", `wj`
 tính 288 lượt, 9,0M token trên cùng dữ liệu; 25 lượt chênh là lượt không có token.
+
+## Antigravity
+
+Antigravity (IDE và CLI `agy`) ghi mỗi cuộc trò chuyện vào một file SQLite
+`~/.gemini/antigravity*/conversations/<id>.db` (các thư mục `antigravity`, `antigravity-cli`, `antigravity-ide`...;
+đổi bằng `ANTIGRAVITY_DATA_DIR`, nhiều thư mục cách nhau dấu phẩy). Số token nằm trong các khối protobuf không có tài
+liệu; `wj` đọc theo số trường mà [ccusage](https://github.com/ccusage/ccusage) đã dò ra, chỉ đọc token, model, thời
+gian, thư mục làm việc và tên/việc của agent phụ, không đọc nội dung.
+
+- **Một lượt gọi tính một lần,** dù Antigravity ghi nó ở cả bước (`steps`) và lượt sinh (`gen_metadata`), hay ở cả cuộc
+  trò chuyện cha và con.
+- **Agent phụ tính vào cuộc trò chuyện cha,** như worker của Claude: xem bằng `agents`.
+- **Tên model** như "Gemini 3.8 Flash (High)" được đổi về tên trong bảng giá; mức suy nghĩ (high/medium/low) tính
+  theo giá của model gốc. Model chỉ có mã số mà chưa biết tên (`model_placeholder_m322`) thì không có giá (dấu `?`).
+
+## Thư mục Claude
+
+Mặc định đọc `~/.claude` và cả `~/.config/claude` (hoặc `$XDG_CONFIG_HOME/claude`) nếu có thư mục `projects` ở đó.
+`CLAUDE_CONFIG_DIR` nhận nhiều thư mục cách nhau dấu phẩy (ví dụ hai tài khoản); đặt biến này thì chỉ đọc các thư mục đó.
+
+## Khối 5 giờ
+
+`wj usage blocks` (hoặc gõ `blocks` trong màn hình tương tác) chia lượt gọi thành các khối 5 giờ, theo cách gói Claude tính
+hạn mức: khối bắt đầu ở giờ tròn của lượt gọi đầu tiên và dài 5 giờ; lượt gọi quá 5 giờ sau khi khối bắt đầu, hoặc sau
+lượt gọi trước đó, mở khối mới. Nghỉ quá 5 giờ thì có một dòng `nghỉ`. Cũng nhận kỳ: `wj usage blocks week`.
+
+```text
+   BẮT ĐẦU  GỌI CUỐI  LƯỢT    TỔNG  VÀO+RA  QUY ĐỔI  MODEL          % GIỚI HẠN
+   12:00    16:58     1449  158.3M    1.6M   $94.18  opus-5-5 +1           83%
+▶  22:00    22:33      297   33.4M  580.5k   $19.77  opus-5-5 +1           17%
+
+▶ Khối đang chạy: 22:00 → 03:00, đã 33 phút, còn 4 giờ
+  Tốc độ: 999.0k token/phút (vào+ra 17.4k/phút), $35.50/giờ
+  Dự kiến hết khối: 299.5M token, $177 — 157% giới hạn 190.9M: VƯỢT
+```
+
+- **Tốc độ** = token từ lượt đầu tới lượt cuối của khối, chia số phút giữa hai lượt; `vào+ra` là phần không cache.
+- **Dự kiến** = số hiện tại cộng tốc độ × số phút còn lại tới hết khối. Chỉ có khi khối đang chạy.
+- **`-limit 5M`** (hoặc `limit 5M` ở dòng lệnh) thêm cột % GIỚI HẠN và trạng thái: ổn, SẮP CHẠM (từ 80%), VƯỢT.
+  `-limit max` lấy khối lớn nhất đã xong làm giới hạn. Giới hạn tính trên TỔNG (cả cache).
+- Khối tính cho mọi app; lọc bằng `-app claude` để xem riêng Claude.
+
+## Phân tích
+
+`wj usage analytics [kỳ]` (hoặc gõ `analytics` trong màn hình tương tác, rồi day/week/←/→ để đổi ngày, tuần) trả lời câu
+"vì sao tốn token thế". Mỗi lượt gọi, model đọc lại cả cuộc trò chuyện, nên phần lớn token là ngữ cảnh đọc lại; báo cáo
+chia số token và ≈USD của kỳ theo:
+
+1. **Loại token**: đọc cache, ghi cache, vào, ra, và phần suy nghĩ (thinking/reasoning) trong ra. Đọc cache thường
+   chiếm hơn 90% token nhưng ít tiền; ghi cache và ra thường mới là phần đắt.
+2. **Cỡ ngữ cảnh mỗi lượt**: dưới 20k, 20k-50k, ... trên 500k. Lượt ngữ cảnh to đắt hơn hẳn.
+3. **Tool**: lượt đó model gọi tool gì (Read, Bash, Edit, exec_command...). Kết quả tool vào ngữ cảnh và bị đọc lại ở
+   mọi lượt sau. Lượt gọi nhiều tool chia đều cho các tool.
+4. **Ngữ cảnh bị làm lại**: cache hết hạn (nghỉ quá 5 phút, hoặc 1 giờ với cache 1 giờ) phải ghi lại cả ngữ cảnh; và số
+   lần nén ngữ cảnh (compact) cùng cỡ ngữ cảnh lúc nén.
+5. **Ai tiêu**: phiên chính hay worker (subagent), theo model.
+6. **Giờ trong ngày**: biểu đồ 00-23.
+7. **Session tốn nhất**: ngữ cảnh trung bình, lớn nhất, số lần nén, số lần cache lại, tool dùng nhiều nhất.
+
+Cuối cùng là **Vì sao tốn**: vài câu rút ra từ số liệu trên (ví dụ worker chiếm 80% token, Bash chiếm 80% token,
+model opus chiếm 79% chi phí) và nên làm gì.
+
+Tool, suy nghĩ và nén có cho Claude Code và Codex; OpenCode và Antigravity chỉ có phần loại token, ngữ cảnh, model, giờ.
+Lần nén của Codex không có cỡ sau khi nén; cỡ trước là ngữ cảnh của lượt cuối trước đó.
+
+## JSON
+
+Thêm `-json` vào lệnh in một lần để có JSON thay vì bảng, cho script hoặc status line:
+
+- `wj usage week -json`: `period`, `totals`, `days`, `sessions` (kèm `workers`) và `models` (kèm token theo project).
+- `wj usage blocks -json -limit 5M`: `blocks` với `burnRate` và `projection` (`limitStatus`: ok, warning, exceeds).
+- `wj usage analytics week -json`: `byKind`, `byContextSize`, `byTool`, `cacheRebuilds`, `compactions`,
+  `mainThreads`/`subagents`, `tokensByHour`, `sessions`, `insights`.
+- `wj usage -since 24h -by model -json`: `totals` và `groups`.
+
+Token là số nguyên, `costUSD` theo giá API niêm yết như cột QUY ĐỔI, thời gian theo RFC 3339.

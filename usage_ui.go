@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -187,6 +188,8 @@ func commandName(word string) string {
 		return "agents"
 	case "live", "running":
 		return "open"
+	case "analyze", "why":
+		return "analytics"
 	case "h", "?":
 		return "help"
 	case "q", "exit", "0":
@@ -216,13 +219,11 @@ func topText(v usageView) string {
 // baseSuggestions are the commands shown when the prompt is empty.
 func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	var list []usageSuggestion
-	current := canonicalSpec(v.Spec)
 	for _, r := range rows {
-		if r.Key == "-" {
+		if r.Unit == unitNone {
 			continue
 		}
-		list = append(list, usageSuggestion{Name: r.Spec, Insert: r.Spec, Apply: r.Spec,
-			Desc: r.Name + "  " + rangeText(r.Period), Stats: statsText(r), Mark: r.Spec == current})
+		list = append(list, unitSuggestion(r))
 	}
 	agents := usageSuggestion{Name: "agents", Insert: "agents", Mark: v.Agents}
 	if v.Agents {
@@ -236,6 +237,22 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	} else {
 		open.Apply, open.Desc = "open on", "chỉ các phiên đang mở lúc này (Claude Code), bận hay rảnh"
 	}
+	analytics := usageSuggestion{Name: "analytics", Insert: "analytics", Mark: v.Analytics}
+	if v.Analytics {
+		analytics.Apply, analytics.Desc = "analytics off", "đang bật: quay về xem từng session"
+	} else {
+		analytics.Apply, analytics.Desc = "analytics on", "phân tích token đi đâu, vì sao tốn: loại token, ngữ cảnh, tool, cache, giờ"
+	}
+	blocks := usageSuggestion{Name: "blocks", Insert: "blocks", Mark: v.Blocks}
+	if v.Blocks {
+		blocks.Apply, blocks.Desc = "blocks off", "đang bật: quay về xem từng session"
+	} else {
+		blocks.Apply, blocks.Desc = "blocks on", "khối 5 giờ như gói Claude tính: tốc độ đốt, dự kiến hết khối"
+	}
+	limit := "không"
+	if v.Limit != "" {
+		limit = v.Limit
+	}
 	project := "tất cả"
 	if v.Project != "" {
 		project = v.Project
@@ -244,7 +261,8 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 	if v.Client != "" {
 		client = v.Client
 	}
-	return append(list, agents, open,
+	return append(list, analytics, agents, open, blocks,
+		usageSuggestion{Name: "limit", Insert: "limit ", NeedsArg: true, Desc: "giới hạn token một khối 5 giờ (đang: " + limit + ")", Mark: v.Limit != ""},
 		usageSuggestion{Name: "top", Insert: "top ", NeedsArg: true, Desc: "số session hiện ra (đang: " + topText(v) + ")", Mark: v.Top >= 0},
 		usageSuggestion{Name: "project", Insert: "project ", NeedsArg: true, Desc: "lọc theo project (đang: " + project + ")", Mark: v.Project != ""},
 		usageSuggestion{Name: "app", Insert: "app ", NeedsArg: true, Desc: "lọc theo app (đang: " + client + ")", Mark: v.Client != ""},
@@ -253,7 +271,20 @@ func baseSuggestions(v usageView, rows []overviewRow) []usageSuggestion {
 		usageSuggestion{Name: "quit", Insert: "quit", Apply: "q", Desc: "thoát (Esc hoặc Ctrl+C cũng được)"})
 }
 
-const periodTypingHint = "gõ thêm để xem kỳ khác: 2026-11-05 · 2026-11 · 14d · 2026-11-01..2026-11-09"
+// unitSuggestion is the line of one kind of period: day, week or month.
+func unitSuggestion(r overviewRow) usageSuggestion {
+	desc := "theo " + r.Unit.name() + ": " + rangeText(r.Period)
+	if r.Name != "" {
+		desc = "theo " + r.Unit.name() + ": " + r.Name + "  " + rangeText(r.Period)
+	}
+	name := r.Unit.command()
+	return usageSuggestion{Name: name, Insert: name, Apply: name, Desc: desc, Stats: statsText(r), Mark: r.Current}
+}
+
+// namedPeriods are found by typing, though the empty list shows only day/week/month.
+var namedPeriods = []string{"today", "yesterday", "lastweek", "lastmonth"}
+
+const periodTypingHint = "gõ thêm để xem kỳ khác: 2026-11-05 · 2026-W45 · 2026-11 · 14d · 2026-11-01..2026-11-09"
 
 // buildSuggestions is the list under the current prompt text, plus a one-line hint.
 func buildSuggestions(input string, v usageView, rows []overviewRow, projects []projectStat, now time.Time) ([]usageSuggestion, string) {
@@ -268,15 +299,31 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 				list = append(list, s)
 			}
 		}
-		for i, r := range rows { // the keys 1-6 still work
-			if cmd == strconv.Itoa(i+1) && r.Key != "-" {
-				list = []usageSuggestion{{Name: r.Spec, Insert: r.Spec, Apply: r.Spec, Desc: r.Name + "  " + rangeText(r.Period), Stats: statsText(r), Mark: r.Current}}
+		for _, r := range rows { // the keys 1-3 still work
+			if cmd == r.Key && r.Unit != unitNone {
+				list = []usageSuggestion{unitSuggestion(r)}
 			}
 		}
 		if cmd != "" {
-			if p, err := resolvePeriod(word, now); err == nil && !isBaseSpec(word) && !(len(list) == 1 && list[0].Apply == word) {
-				list = append([]usageSuggestion{{Name: word, Insert: word, Apply: word, Desc: p.Label}}, list...)
+			listed := func(name string) bool {
+				for _, s := range list {
+					if s.Name == name {
+						return true
+					}
+				}
+				return false
 			}
+			var periods []usageSuggestion
+			for _, name := range namedPeriods {
+				if strings.HasPrefix(name, cmd) {
+					p, _ := resolvePeriod(name, now)
+					periods = append(periods, usageSuggestion{Name: name, Insert: name, Apply: name, Desc: p.Label})
+				}
+			}
+			if p, err := resolvePeriod(word, now); err == nil && !listed(cmd) && !slices.Contains(namedPeriods, cmd) {
+				periods = append(periods, usageSuggestion{Name: word, Insert: word, Apply: word, Desc: p.Label})
+			}
+			list = append(periods, list...)
 		}
 		if len(list) == 0 {
 			return nil, fmt.Sprintf("không có lệnh nào khớp %q — %s", word, periodTypingHint)
@@ -313,7 +360,7 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 			}
 		}
 	case "app":
-		for _, name := range []string{"all", "claude", "codex", "opencode"} {
+		for _, name := range []string{"all", "claude", "codex", "opencode", "antigravity"} {
 			if has(name) {
 				list = append(list, option(name, "", "", v.Client == name || (name == "all" && v.Client == "")))
 			}
@@ -326,6 +373,33 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 			if has(o.name) {
 				list = append(list, option(o.name, o.desc, "", v.Agents == o.on))
 			}
+		}
+	case "analytics":
+		for _, o := range []struct {
+			name, desc string
+			on         bool
+		}{{"on", "phân tích token của kỳ", true}, {"off", "từng session", false}} {
+			if has(o.name) {
+				list = append(list, option(o.name, o.desc, "", v.Analytics == o.on))
+			}
+		}
+	case "blocks":
+		for _, o := range []struct {
+			name, desc string
+			on         bool
+		}{{"on", "khối 5 giờ", true}, {"off", "từng session", false}} {
+			if has(o.name) {
+				list = append(list, option(o.name, o.desc, "", v.Blocks == o.on))
+			}
+		}
+	case "limit":
+		for _, o := range []struct{ name, desc string }{{"max", "khối lớn nhất trước đó"}, {"1M", ""}, {"5M", ""}, {"10M", ""}, {"50M", ""}, {"off", "bỏ giới hạn"}} {
+			if strings.HasPrefix(strings.ToLower(o.name), strings.ToLower(rest)) {
+				list = append(list, option(o.name, o.desc, "", strings.EqualFold(v.Limit, o.name) || o.name == "off" && v.Limit == ""))
+			}
+		}
+		if _, err := parseTokenCount(rest); err == nil && len(list) == 0 {
+			list = append(list, option(rest, "", "", false))
 		}
 	case "open":
 		for _, o := range []struct {
@@ -345,16 +419,6 @@ func buildSuggestions(input string, v usageView, rows []overviewRow, projects []
 	return list, ""
 }
 
-func isBaseSpec(word string) bool {
-	canonical := canonicalSpec(word)
-	for _, spec := range overviewSpecs {
-		if spec == canonical {
-			return true
-		}
-	}
-	return false
-}
-
 // usageUI is what the screen remembers between key presses.
 type usageUI struct {
 	v         usageView // the view that was chosen
@@ -372,14 +436,16 @@ type usageUI struct {
 func refreshText() string { return fmt.Sprintf("%.0fs", usageRefreshEvery.Seconds()) }
 
 const usageUIHelp = `Phím:
-  ↑ ↓         chọn lệnh trong danh sách — báo cáo đổi theo ngay (xem trước)
+  ← →         kỳ trước / kỳ sau (ngày, tuần hoặc tháng, theo kiểu đang xem)
+  ↑ ↓         cuộn báo cáo; khi đang ở danh sách lệnh thì chọn lệnh, báo cáo đổi theo ngay
+  Tab         vào danh sách lệnh (dòng đang dùng); bấm lần nữa thì điền lệnh vào dòng nhập
   Enter       chốt lệnh đang chọn (lệnh có tham số thì mở danh sách giá trị)
-  Tab         điền lệnh vào dòng nhập      Esc  bỏ xem trước / xoá dòng nhập / thoát
-  PgUp PgDn   cuộn báo cáo                 Home End  lên đầu / xuống cuối
+  Esc         rời danh sách / xoá dòng nhập / thoát
+  PgUp PgDn   cuộn báo cáo theo trang      Home End  lên đầu / xuống cuối
   Ctrl+U      xoá dòng nhập                Ctrl+C hoặc q  thoát
 
-Gõ để lọc danh sách. Kỳ gõ tay: 2026-11-05, 2026-11, 14d, 2026-11-01..2026-11-09.
-Gõ số 1-6 để nhảy tới kỳ đầu danh sách (today … lastmonth).
+Gõ để lọc danh sách. 1 2 3 = day, week, month.
+Kỳ gõ tay: today, yesterday, lastweek, lastmonth, 2026-11-05, 2026-W45, 2026-11, 14d, 2026-11-01..2026-11-09.
 
 Bấm phím bất kỳ để quay lại báo cáo.`
 
@@ -408,20 +474,45 @@ func (ui *usageUI) handle(k keyEvent, list []usageSuggestion, now time.Time) boo
 		}
 	case keyCtrlU:
 		ui.input, ui.sel, ui.auto = nil, -1, false
+	// Outside the list (nothing highlighted) ↑↓ scroll the report, so a mouse wheel
+	// never changes the view; Tab or typing enters the list.
 	case keyDown:
-		if len(list) > 0 {
+		if ui.sel < 0 {
+			ui.scroll++
+		} else if len(list) > 0 {
 			ui.sel = (ui.sel + 1) % len(list)
 		}
 	case keyUp:
-		if len(list) > 0 {
+		if ui.sel < 0 {
+			ui.scroll = max(0, ui.scroll-1)
+		} else if len(list) > 0 {
 			ui.sel = (ui.sel - 1 + len(list)) % len(list)
-			if ui.sel < 0 {
-				ui.sel = len(list) - 1
-			}
+		}
+	case keyLeft, keyRight:
+		if len(ui.input) > 0 {
+			break
+		}
+		cmd := "next"
+		if k.kind == keyLeft {
+			cmd = "prev"
+		}
+		ui.sel = -1
+		if msg, _ := applyUsageCommand(&ui.v, cmd, now); msg != "" {
+			ui.message = msg
 		}
 	case keyTab:
-		if len(list) > 0 {
-			ui.input = []rune(list[max(ui.sel, 0)].Insert)
+		switch {
+		case len(list) == 0:
+		case ui.sel < 0: // enter the list on the line in use
+			ui.sel = 0
+			for i, s := range list {
+				if s.Mark {
+					ui.sel = i
+					break
+				}
+			}
+		default:
+			ui.input = []rune(list[ui.sel].Insert)
 			ui.auto = true
 		}
 	case keyEsc:
@@ -588,7 +679,10 @@ func renderUsageFrame(ui *usageUI, reportLines []string, list []usageSuggestion,
 		}
 	}
 
-	title := "Lệnh   ↑↓ chọn và xem ngay · Tab điền · Enter chốt · Esc huỷ"
+	title := "Lệnh   ← → kỳ trước/sau · Tab vào danh sách · ↑↓ cuộn · Esc thoát"
+	if ui.sel >= 0 {
+		title = "Lệnh   ↑↓ chọn và xem ngay · Tab điền · Enter chốt · Esc rời danh sách"
+	}
 	if maxScroll > 0 && !ui.help {
 		title += fmt.Sprintf(" · PgUp/PgDn cuộn (%d–%d/%d)", ui.scroll+1, min(ui.scroll+region, len(source)), len(source))
 	}
@@ -759,7 +853,7 @@ func runUsageScreen(file *os.File, out io.Writer, sc *sessionScanner, v usageVie
 	defer enableTerminalEscapes()()
 	fmt.Fprint(out, "\x1b[?1049h\x1b[2J\x1b[H")
 	// Reading a month of session files takes several seconds the first time.
-	fmt.Fprint(out, "Đang đọc phiên của Claude Code, Codex, OpenCode trên máy này (lần đầu vài giây)...")
+	fmt.Fprint(out, "Đang đọc phiên của Claude Code, Codex, OpenCode, Antigravity trên máy này (lần đầu vài giây)...")
 	final, loopErr := usageUILoop(keys, out, sc, v, oldest, size, usageRefreshEvery)
 	fmt.Fprint(out, "\x1b[?1049l")
 	restore()
