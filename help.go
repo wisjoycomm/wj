@@ -172,9 +172,10 @@ một project.
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
                           ↑↓ chọn lệnh → báo cáo đổi theo ngay; Enter chốt; Tab điền; gõ để lọc danh sách;
-                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents,
+                          Esc huỷ; PgUp/PgDn cuộn; q hoặc Ctrl+C thoát. Lệnh: today … lastmonth, agents, open,
                           top, project, app (chọn lệnh có giá trị thì mở danh sách giá trị), reset, help.
-                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project
+                          Đầu báo cáo có bảng 6 kỳ, cuối có cây tổng hợp: tổng → từng model → từng project.
+                          Phiên Claude đang mở có dấu ● (đang trả lời) hoặc ○ (rảnh); gõ open để chỉ xem chúng
   wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát
                           kỳ: today, yesterday, week, lastweek, month, lastmonth, 7d (N ngày gần nhất),
                           2026-11-09, 2026-11, 2026-11-01..2026-11-09. Tuần bắt đầu thứ Hai

@@ -88,6 +88,7 @@ có bảng.
 | `2026-11-09`, `2026-11` | một ngày, một tháng |
 | `2026-11-01..2026-11-09` | khoảng ngày bất kỳ (gồm cả hai đầu) |
 | `agents` / `agents off` | bật/tắt liệt kê từng worker dưới session của nó |
+| `open` / `open off` | chỉ các phiên Claude Code đang mở lúc này (xem mục "Phiên đang mở") |
 | `top 30`, `top 0`, `top auto` | số session hiện ra (0 = tất cả, auto = vừa màn hình) |
 | `project TÊN`, `project all` | lọc theo project |
 | `app claude`, `app codex`, `app all` | lọc theo app |
@@ -260,6 +261,22 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 - Chỉ tính được khi file phiên còn trên máy.
 - Số liệu của từng máy riêng, không cộng giữa các máy.
 - **Cursor và Antigravity chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy;  Antigravity có số trong cơ sở dữ liệu nhưng định dạng chưa có tài liệu, chưa đối chiếu được. Hai app này  không có mặt trong `wj usage` và `wj top`. Báo cáo chỉ gồm các app ghi trong dòng đầu.- App khác đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
+
+## Phiên đang mở
+
+Mỗi dòng session trong báo cáo có dấu sau mã nếu phiên đó **đang mở**: `●` là đang trả lời, `○` là đang rảnh
+(chờ bạn). Không có dấu nghĩa là phiên đã đóng. Gõ `open` ở dòng lệnh để chỉ xem các phiên đang mở, kèm token của
+chúng trong kỳ đang chọn; gõ `open off` để quay về mọi session. Chế độ `open` bỏ bảng "Theo ngày" và cây model, vì
+tổng chỉ tính cho các phiên đang mở.
+
+- **Nguồn:** Claude Code tự ghi một file nhỏ cho mỗi phiên đang chạy ở `~/.claude/sessions/<pid>.json`
+  (pid, session id, thư mục làm việc, bận hay rảnh). `wj` đọc các file đó và kiểm tra tiến trình còn sống; trên
+  Windows còn so giờ bắt đầu tiến trình để không nhầm với một tiến trình khác dùng lại cùng pid.
+- **Tự cập nhật:** dấu `●`/`○` đổi khi một phiên mở, đóng hoặc chuyển giữa bận và rảnh, và màn hình tự vẽ lại (chu
+  kỳ 5 giây như các số khác).
+- **Phiên nền (`bg`)** như worker chạy ngầm cũng được tính là đang mở.
+- **Giới hạn:** chỉ Claude Code. Codex và OpenCode không ghi file nào cho phiên đang chạy, nên `wj` chưa nhận ra
+  phiên đang mở của chúng; dòng `open` chỉ hiện các phiên Claude.
 
 ## OpenCode
 
