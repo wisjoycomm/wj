@@ -541,7 +541,7 @@ func checkPlanFormat(env doctorEnv) []doctorFinding {
 				Key:    "plan:" + filepath.Base(root),
 				Title:  fmt.Sprintf("PLAN.md sai format (%d lỗi): %s", len(issues), root),
 				Detail: strings.Join(lines, "\n"),
-				Fix:    "sửa tay theo từng dòng trên; orchestrator cũng thấy các lỗi này trong plan.ps1",
+				Fix:    "sửa tay theo từng dòng trên; orchestrator cũng thấy các lỗi này trong wj plan",
 			})
 		}
 	}

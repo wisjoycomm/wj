@@ -1,20 +1,27 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false"
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
   "permissions": {
     "defaultMode": "acceptEdits",
     "allow": [
-      "Bash(pwsh -NoProfile -NonInteractive -File .claude/skills/orca-stateless-worker/scripts/fast_verify.ps1 *)",
-      "Bash(pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/plan.ps1)",
+      "Agent(orca-worker)",
+      "Bash(wj plan *)",
+      "Bash(wj verify *)",
+      "Bash(wj digest *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
       "Bash(git status)",
       "Bash(git status *)",
       "Bash(git diff)",
       "Bash(git diff *)",
       "Bash(git log *)",
       "Bash(git show *)",
-      "Bash(rg *)",
-      "Bash(fd *)",
-      "Bash(jq *)",
-      "Bash(eza *)"
+      "Bash(jq *)"
     ],
     "ask": [
       "Bash(git push)",
@@ -23,7 +30,8 @@
     "deny": [
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
-      "Bash(git clean *)"
+      "Bash(git clean *)",
+      "Read(/PLAN-ARCHIVE.md)"
     ]
   }
 }

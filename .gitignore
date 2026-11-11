@@ -10,3 +10,10 @@ coverage.out
 # wj init
 .tmp/
 .claude/settings.local.json
+
+# wj init
+.claude/worktrees/
+CLAUDE.local.md
+
+# wj init
+.claude/memory/

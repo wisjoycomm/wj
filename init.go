@@ -19,9 +19,25 @@ import (
 var kitFS embed.FS
 
 const (
-	kitBase   = "kit/base"
-	kitStacks = "kit/stacks"
+	kitBase     = "kit/base"
+	kitStacks   = "kit/stacks"
+	kitSettings = kitBase + "/dot-claude/settings.json"
 )
+
+// kitTarget is where a kit/base file goes in a project. Folders that start
+// with a dot are stored as dot-<name>, so tools working on this repo don't
+// take the kit's .claude folder for the repo's own.
+func kitTarget(rel string) string {
+	return strings.TrimPrefix(strings.ReplaceAll("/"+rel, "/dot-", "/."), "/")
+}
+
+// kitSource is the kit/base path of a project file.
+func kitSource(rel string) string {
+	if strings.HasPrefix(rel, ".") {
+		rel = "dot-" + rel[1:]
+	}
+	return kitBase + "/" + rel
+}
 
 // initStack is one kind of job. Its files live in kit/stacks/<id>/: rules.md
 // goes into AGENTS.md, gitignore into .gitignore, settings.json (optional) into
@@ -45,6 +61,8 @@ type initChange struct {
 	path   string
 	text   string
 	write  bool
+	backup bool // keep the old file next to it as .bak-<time>
+	remove bool
 	status string
 }
 
@@ -53,11 +71,12 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	flags.SetOutput(out)
 	types := flags.String("type", "", "loại job, vd unity hoặc web,go (bỏ trống thì tool hỏi)")
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
+	update := flags.Bool("update", false, "thay skill Orca cũ trong project bằng bản của kit (bản cũ sao lưu .bak)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() > 1 {
-		return errors.New("cách dùng: wj init [-type unity,web] [-dry-run] [thư mục]")
+		return errors.New("cách dùng: wj init [-type unity,web] [-update] [-dry-run] [thư mục]")
 	}
 	dir := "."
 	if flags.NArg() == 1 {
@@ -75,7 +94,7 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	changes, err := planInit(root, stacks)
+	changes, err := planInit(root, stacks, *update)
 	if err != nil {
 		return err
 	}
@@ -138,16 +157,16 @@ func detectStacks(root string) []string {
 	return found
 }
 
-func planInit(root string, stacks []string) ([]initChange, error) {
+func planInit(root string, stacks []string, update bool) ([]initChange, error) {
 	var changes []initChange
 	err := fs.WalkDir(kitFS, kitBase, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		rel := strings.TrimPrefix(path, kitBase+"/")
-		if rel == "AGENTS.md" || rel == ".claude/settings.json" {
+		if path == kitBase+"/AGENTS.md" || path == kitSettings {
 			return nil
 		}
+		rel := kitTarget(strings.TrimPrefix(path, kitBase+"/"))
 		data, err := kitFS.ReadFile(path)
 		if err != nil {
 			return err
@@ -156,13 +175,32 @@ func planInit(root string, stacks []string) ([]initChange, error) {
 		if err != nil {
 			return err
 		}
+		// The Orca skills are wj's own files: an older copy can be replaced on request.
+		if strings.HasPrefix(change.status, "giữ nguyên") && contains(orcaSkillFiles, rel) {
+			if update {
+				change = initChange{path: change.path, text: string(data), write: true, backup: true, status: "cập nhật (bản cũ: .bak)"}
+			} else {
+				change.status += " - lấy bản mới: wj init -update"
+			}
+		}
 		changes = append(changes, change)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	for _, plan := range []func(string, []string) (initChange, error){planAgents, planSettings, planGitignore} {
+	// Removals keep their own order (a folder's files before the folder), after
+	// everything else.
+	var old []initChange
+	if update {
+		for _, rel := range orcaOldFiles {
+			path := filepath.Join(root, filepath.FromSlash(rel))
+			if _, err := os.Stat(path); err == nil {
+				old = append(old, initChange{path: path, remove: true, status: "xoá (kit mới không dùng nữa)"})
+			}
+		}
+	}
+	for _, plan := range []func(string, []string) (initChange, error){planAgents, planSettings, planLocalMemory, planGitignore} {
 		change, err := plan(root, stacks)
 		if err != nil {
 			return nil, err
@@ -170,7 +208,7 @@ func planInit(root string, stacks []string) ([]initChange, error) {
 		changes = append(changes, change)
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].path < changes[j].path })
-	return changes, nil
+	return append(changes, old...), nil
 }
 
 // planCopy never overwrites: a file already in the project is the user's.
@@ -259,7 +297,7 @@ func planSettings(root string, stacks []string) (initChange, error) {
 	}
 	_, statErr := os.Stat(path)
 	hasFile := statErr == nil
-	sources := []string{kitBase + "/.claude/settings.json"}
+	sources := []string{kitSettings}
 	for _, id := range stacks {
 		sources = append(sources, kitStacks+"/"+id+"/settings.json")
 	}
@@ -295,6 +333,35 @@ func planSettings(root string, stacks []string) (initChange, error) {
 	return initChange{path: path, text: buf.String(), write: true, status: status}, nil
 }
 
+// planLocalMemory keeps Claude Code's auto memory inside the project instead of
+// under ~/.claude. The setting needs an absolute path, so it goes in the
+// uncommitted settings.local.json; the folder is the main checkout's, so every
+// worktree of the repo shares one memory. A value already there is the user's.
+func planLocalMemory(root string, _ []string) (initChange, error) {
+	path := projectSettingsPath(root)
+	doc, err := readConfig(path)
+	if err != nil {
+		return initChange{}, fmt.Errorf("file %s bị lỗi cú pháp; tool không sửa nó", path)
+	}
+	if _, set := doc["autoMemoryDirectory"]; set {
+		return initChange{path: path, status: "đã đúng"}, nil
+	}
+	_, statErr := os.Stat(path)
+	doc["autoMemoryDirectory"] = filepath.Join(mainRepoRoot(root), ".claude", "memory")
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err = encoder.Encode(doc); err != nil {
+		return initChange{}, err
+	}
+	status := "tạo (memory của Claude Code nằm trong project)"
+	if statErr == nil {
+		status = "thêm autoMemoryDirectory (memory nằm trong project)"
+	}
+	return initChange{path: path, text: buf.String(), write: true, status: status}, nil
+}
+
 // mergeSettings reports whether it added anything. A rule already in any list
 // stays where it is, so a stricter choice the user made is never loosened.
 func mergeSettings(doc, kit map[string]any) bool {
@@ -306,6 +373,19 @@ func mergeSettings(doc, kit map[string]any) bool {
 		if _, exists := doc[key]; !exists {
 			doc[key] = value
 			added = true
+			continue
+		}
+		// env: add the variables the user hasn't set; theirs keep their values.
+		have, _ := doc[key].(map[string]any)
+		want, _ := value.(map[string]any)
+		if key != "env" || have == nil {
+			continue
+		}
+		for name, setting := range want {
+			if _, exists := have[name]; !exists {
+				have[name] = setting
+				added = true
+			}
 		}
 	}
 	source, _ := kit["permissions"].(map[string]any)
@@ -360,7 +440,10 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 	for _, line := range strings.Split(string(data), "\n") {
 		present[strings.TrimSpace(line)] = true
 	}
-	wanted := []string{".tmp/", ".claude/settings.local.json"}
+	// .claude/worktrees/ is where Claude Code puts each worker subagent's worktree.
+	// Memory stays on this machine: Claude Code's own notes in .claude/memory/,
+	// approved lessons in CLAUDE.local.md.
+	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", ".claude/memory/", "CLAUDE.local.md"}
 	for _, id := range stacks {
 		extra, err := kitFS.ReadFile(kitStacks + "/" + id + "/gitignore")
 		if err != nil {
@@ -404,7 +487,17 @@ func applyInit(root string, stacks []string, changes []initChange, dry bool, out
 		fmt.Fprintf(out, "Setup project: %s (%s)\n", root, jobs)
 	}
 	for _, change := range changes {
-		if change.write && !dry {
+		switch {
+		case dry:
+		case change.remove:
+			if err := removeOldFile(change.path); err != nil {
+				return err
+			}
+		case change.backup:
+			if err := writeFile(change.path, change.text, false); err != nil {
+				return err
+			}
+		case change.write:
 			if err := os.MkdirAll(filepath.Dir(change.path), 0o755); err != nil {
 				return err
 			}
@@ -419,12 +512,24 @@ func applyInit(root string, stacks []string, changes []initChange, dry bool, out
 		fmt.Fprintf(out, "  %-62s %s\n", filepath.ToSlash(rel), change.status)
 	}
 	if !isGitRepo(root) {
-		fmt.Fprintln(out, "\nProject chưa có git. Worker Orca cần git: chạy git init rồi commit các file này.")
+		fmt.Fprintln(out, "\nProject chưa có git. Worker cần git: chạy git init rồi commit các file này.")
 		return nil
 	}
 	if !dry {
-		fmt.Fprintln(out, "\nCommit các file này trước khi chạy worker Orca: worktree chỉ thấy file đã commit.")
+		fmt.Fprintln(out, "\nCommit các file này trước khi chạy worker: worktree của worker chỉ thấy file đã commit.")
+		fmt.Fprintln(out, "Mở lại Claude Code để nó nhận subagent orca-worker và settings mới.")
 	}
+	return nil
+}
+
+// removeOldFile deletes a file the kit no longer ships, and its folder once
+// that is empty.
+func removeOldFile(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("không xoá được %s: %w", path, err)
+	}
+	// Fails while other files remain there, which is what we want.
+	_ = os.Remove(filepath.Dir(path))
 	return nil
 }
 

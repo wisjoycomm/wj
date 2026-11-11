@@ -62,10 +62,58 @@ func TestPlanStatusOrdersReadyByPriorityAndHonoursScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"NEXT ID: T-10", "$orca-stateless-worker T-02", "T-03 needs T-01(DOING)", "T-04 scope clash with T-01"} {
+	for _, want := range []string{"NEXT ID: T-10", "  4    T-02   codex", "T-03 needs T-01(DOING)", "T-04 scope clash with T-01"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in:\n%s", want, text)
 		}
+	}
+}
+
+func TestPlanAgentCanNameAModel(t *testing.T) {
+	plan := strings.Replace(goodPlan, "| TODO | codex |", "| TODO | claude:haiku |", 1)
+	if _, issues := parsePlan(plan); len(issues) != 0 {
+		t.Fatalf("claude:<model> must be a valid Agent: %v", issues)
+	}
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "PLAN.md"), plan)
+	var out bytes.Buffer
+	if err := runPlanIn(nil, &out, root); err != nil {
+		t.Fatal(err)
+	}
+	// The orchestrator reads the model for the worker from the READY line.
+	if !strings.Contains(out.String(), "T-02   claude:haiku") {
+		t.Errorf("READY must show the task's model:\n%s", out.String())
+	}
+	for _, bad := range []string{"claude:", "claude:two words", "gpt", "claude:a;rm"} {
+		if _, issues := parsePlan(strings.Replace(goodPlan, "| TODO | codex |", "| TODO | "+bad+" |", 1)); len(issues) == 0 {
+			t.Errorf("Agent %q must be rejected", bad)
+		}
+	}
+}
+
+func TestPlanLogQueriesTheArchive(t *testing.T) {
+	root := t.TempDir()
+	row := func(id, task, commit string) string {
+		return "| " + id + " | " + task + " | P1 | 3 | DONE | claude | - | `src/a.go` | - | - | wt | " + commit + " | 2026-11-01 |\n"
+	}
+	writeTestFile(t, filepath.Join(root, "PLAN-ARCHIVE.md"), "old free text T-00\n\n"+archiveHeaderLine+"\n"+archiveSeparatorLine+"\n"+
+		row("T-01", "Add JWT check", "abc1234")+row("T-02", "Fix DB pool", "def5678")+row("T-12", "Tax logic", "-"))
+	run := func(args ...string) string {
+		var out bytes.Buffer
+		if err := runPlanIn(append([]string{"log"}, args...), &out, root); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	// No PLAN.md here: the archive is read on its own.
+	if text := run("-last", "2"); !strings.Contains(text, "3 rows, last 2") || strings.Contains(text, "T-01") || !strings.Contains(text, "def5678") {
+		t.Errorf("-last 2:\n%s", text)
+	}
+	if text := run("-find", "t-12"); !strings.Contains(text, "matching 't-12': 1") || !strings.Contains(text, "Tax logic") {
+		t.Errorf("-find by ID:\n%s", text)
+	}
+	if text := run("-find", "db pool"); !strings.Contains(text, "T-02") || strings.Contains(text, "T-12") {
+		t.Errorf("-find by text:\n%s", text)
 	}
 }
 
@@ -129,6 +177,8 @@ func TestPlanConvertBacksUpAndRefreshesSkills(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "PLAN.md"), oldPlan)
 	writeTestFile(t, filepath.Join(root, ".claude", "skills", "orca-orchestrator", "SKILL.md"), "old skill")
+	oldScript := filepath.Join(root, ".claude", "skills", "orca-orchestrator", "scripts", "plan.ps1")
+	writeTestFile(t, oldScript, "old script")
 	var out bytes.Buffer
 	if err := runPlanIn([]string{"convert"}, &out, root); err != nil {
 		t.Fatal(err, out.String())
@@ -138,6 +188,9 @@ func TestPlanConvertBacksUpAndRefreshesSkills(t *testing.T) {
 	}
 	if !strings.Contains(readText(t, filepath.Join(root, ".claude", "skills", "orca-orchestrator", "SKILL.md")), "ONE Markdown table") {
 		t.Fatal("orchestrator skill not refreshed")
+	}
+	if _, err := os.Stat(oldScript); err == nil {
+		t.Fatal("the script the refreshed skill no longer calls must go")
 	}
 	backups, _ := filepath.Glob(filepath.Join(root, "PLAN.md.bak-*"))
 	if len(backups) != 1 || readText(t, backups[0]) != oldPlan {
@@ -158,7 +211,7 @@ func TestKitPlanIsAnEmptyStrictTable(t *testing.T) {
 		t.Fatalf("kit PLAN.md: %d tasks, issues %v", len(tasks), issues)
 	}
 	for _, rel := range orcaSkillFiles {
-		text, err := kitFS.ReadFile(kitBase + "/" + rel)
+		text, err := kitFS.ReadFile(kitSource(rel))
 		if err != nil {
 			t.Fatal(err)
 		}

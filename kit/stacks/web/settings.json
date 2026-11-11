@@ -6,6 +6,16 @@
       "Bash(npm test *)",
       "Bash(pnpm install --frozen-lockfile)",
       "Bash(npx vitest run *)"
+    ],
+    "deny": [
+      "Read(node_modules/**)",
+      "Read(.next/**)",
+      "Read(coverage/**)",
+      "Read(package-lock.json)",
+      "Read(pnpm-lock.yaml)",
+      "Read(yarn.lock)",
+      "Read(.env)",
+      "Read(.env.local)"
     ]
   }
 }

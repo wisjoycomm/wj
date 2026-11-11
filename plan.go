@@ -16,8 +16,8 @@ import (
 	"time"
 )
 
-// PLAN.md is one Markdown table and nothing else, so scripts (plan.ps1,
-// fast_verify.ps1, wj plan) can read a task from a single line.
+// PLAN.md is one Markdown table and nothing else, so wj plan and wj verify can
+// read a task from a single line.
 var planColumns = []string{"ID", "Task", "Pri", "SP", "Status", "Agent", "Depends", "Scope", "Verify", "Notes", "Session"}
 
 const utf8BOM = "\xef\xbb\xbf"
@@ -33,6 +33,7 @@ var (
 	planPriorities    = []string{"P0", "P1", "P2", "P3"}
 	planPoints        = []string{"1", "2", "3", "5", "8", "13", "?"}
 	planAgentNames    = []string{"claude", "codex", "agy"}
+	planModelPattern  = regexp.MustCompile(`^claude:[A-Za-z0-9][A-Za-z0-9._/\[\]-]*$`)
 	planHeaderLine    = "| " + strings.Join(planColumns, " | ") + " |"
 	planSeparatorLine = "|" + strings.Repeat("---|", len(planColumns))
 )
@@ -41,6 +42,8 @@ const planHelp = `PLAN.md dạng một bảng duy nhất (cho orchestrator / wor
 
   wj plan              bảng tóm tắt: task sẵn sàng chạy, đang chạy, bị chặn
   wj plan check        kiểm tra đúng format (in lỗi kèm số dòng)
+  wj plan log          20 task đã archive gần nhất (-last 50: nhiều hơn;
+                       -find T-12: một ID, hoặc chữ trong Task / Notes)
   wj plan convert      đổi PLAN.md kiểu cũ (checkbox + Backlog) sang bảng,
                        và cập nhật skill orca trong project cho khớp format mới
                        (-dry-run: chỉ xem; file cũ được sao lưu .bak-<giờ>)
@@ -55,12 +58,12 @@ const planHelp = `PLAN.md dạng một bảng duy nhất (cho orchestrator / wor
   Pri     P0 (gấp) | P1 | P2 | P3 (để sau)
   SP      story point: 1 | 2 | 3 | 5 | 8 | 13 (13 = tách nhỏ) | ? (chưa ước lượng)
   Status  TODO | DOING | DONE | BLOCKED | PARTIAL
-  Agent   claude | codex | agy
+  Agent   claude | claude:<model> (vd claude:haiku, worker chạy bằng model đó) | codex | agy
   Depends ID cách nhau dấu phẩy, hoặc -
   Scope   đường dẫn trong backtick, cách nhau dấu phẩy
   Verify  một lệnh trong backtick, hoặc - (tự đoán)
   Notes   tối đa 100 ký tự
-  Session phiên/worktree đang làm task, hoặc -
+  Session nhánh worker đã commit, hoặc -
   Không ô nào được chứa ký tự | hay xuống dòng.`
 
 type planTask struct {
@@ -169,8 +172,8 @@ func parsePlan(text string) ([]planTask, []planIssue) {
 		if !contains(planStatuses, t.Status) {
 			bad("Status %q phải là %s", t.Status, strings.Join(planStatuses, "|"))
 		}
-		if !contains(planAgentNames, t.Agent) {
-			bad("Agent %q phải là %s", t.Agent, strings.Join(planAgentNames, "|"))
+		if !planAgentOK(t.Agent) {
+			bad("Agent %q phải là %s hoặc claude:<model>", t.Agent, strings.Join(planAgentNames, "|"))
 		}
 		for _, d := range t.Depends {
 			if !planIDPattern.MatchString(d) {
@@ -192,6 +195,12 @@ func parsePlan(text string) ([]planTask, []planIssue) {
 		tasks = append(tasks, t)
 	}
 	return tasks, issues
+}
+
+// planAgentOK accepts an agent name, or claude:<model> for a worker that
+// starts on a named model.
+func planAgentOK(agent string) bool {
+	return contains(planAgentNames, agent) || planModelPattern.MatchString(agent)
 }
 
 func allDashes(cells []string) bool {
@@ -311,7 +320,7 @@ func convertOldPlan(text string) ([]planTask, int) {
 			if m := oldFieldLine.FindStringSubmatch(line); m != nil {
 				switch m[1] {
 				case "Agent":
-					if a := strings.ToLower(strings.TrimSpace(m[2])); contains(planAgentNames, a) {
+					if a := strings.ToLower(strings.TrimSpace(m[2])); planAgentOK(a) {
 						cur.Agent = a
 					}
 				case "Scope":
@@ -405,6 +414,8 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 	flags.SetOutput(out)
 	dry := flags.Bool("dry-run", false, "chỉ xem, không ghi file")
 	commit := flags.String("commit", "", "archive: commit merge của các task (mặc định tự tìm trong git log)")
+	last := flags.Int("last", 20, "log: số task gần nhất")
+	find := flags.String("find", "", "log: một ID, hoặc chữ trong Task / Notes")
 	if sub == "archive" {
 		// IDs come first: wj plan archive T-01 T-02 -commit abc123
 		var ids, rest []string
@@ -422,6 +433,12 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 			return nil
 		}
 		return err
+	}
+	if sub == "log" {
+		if flags.NArg() != 0 {
+			return errors.New("cách dùng: wj plan log [-last 50] [-find T-12]")
+		}
+		return planLog(out, root, *last, *find)
 	}
 	path := filepath.Join(root, "PLAN.md")
 	data, err := os.ReadFile(path)
@@ -521,16 +538,12 @@ func planStatus(out io.Writer, root, text string) error {
 			fmt.Fprintf(out, "  %-4d %-6s %-8s %-14s %s\n", t.Line, t.ID, t.Status, t.Session, cutText(t.Task, 60))
 		}
 	}
-	fmt.Fprintln(out, "READY (by priority):")
+	fmt.Fprintln(out, "READY (highest priority first; line, id, agent, pri, sp, task):")
 	if len(ready) == 0 {
 		fmt.Fprintln(out, "  (none)")
 	}
 	for _, t := range ready {
-		cmd := "/orca-stateless-worker " + t.ID
-		if t.Agent == "codex" {
-			cmd = "$orca-stateless-worker " + t.ID
-		}
-		fmt.Fprintf(out, "  %-30s # line %d, %s %s SP%s: %s\n", cmd, t.Line, t.Agent, t.Pri, t.SP, cutText(t.Task, 50))
+		fmt.Fprintf(out, "  %-4d %-6s %-14s %s SP%-2s %s\n", t.Line, t.ID, t.Agent, t.Pri, t.SP, cutText(t.Task, 60))
 	}
 	if len(waiting) > 0 {
 		fmt.Fprintln(out, "WAITING:")
@@ -567,16 +580,63 @@ func scopeClash(a, b []string) string {
 	return ""
 }
 
-// orcaSkillFiles are the kit files whose instructions depend on the PLAN.md format.
+// planLog prints archived tasks, so nobody has to read PLAN-ARCHIVE.md. Only
+// table rows with every column count; older free text in the file is skipped.
+func planLog(out io.Writer, root string, last int, find string) error {
+	data, err := os.ReadFile(filepath.Join(root, "PLAN-ARCHIVE.md"))
+	if err != nil {
+		return fmt.Errorf("không đọc được PLAN-ARCHIVE.md: %w", err)
+	}
+	type archived struct {
+		line  int
+		cells []string
+	}
+	var rows, hits []archived
+	for i, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		cells, ok := splitPlanRow(line)
+		if ok && len(cells) == len(archiveColumns) && verifyIDPattern.MatchString(cells[0]) {
+			rows = append(rows, archived{i + 1, cells})
+		}
+	}
+	if find != "" {
+		needle := strings.ToLower(find)
+		for _, row := range rows {
+			if strings.EqualFold(row.cells[0], find) || strings.Contains(strings.ToLower(row.cells[1]), needle) ||
+				strings.Contains(strings.ToLower(row.cells[9]), needle) {
+				hits = append(hits, row)
+			}
+		}
+		fmt.Fprintf(out, "ARCHIVE: %d rows, matching '%s': %d\n", len(rows), find, len(hits))
+	} else {
+		hits = rows
+		if last > 0 && len(hits) > last {
+			hits = hits[len(hits)-last:]
+		}
+		fmt.Fprintf(out, "ARCHIVE: %d rows, last %d (line, id, status, commit, archived, task)\n", len(rows), len(hits))
+	}
+	for _, row := range hits {
+		c := row.cells
+		fmt.Fprintf(out, "  %-5d %-6s %-8s %-10s %-10s %s\n", row.line, c[0], c[4], c[11], c[12], cutText(c[1], 70))
+	}
+	return nil
+}
+
+// orcaSkillFiles are the kit's skills and its worker subagent, which wj owns:
+// wj plan convert and wj init -update replace an older copy in a project.
 var orcaSkillFiles = []string{
 	".claude/skills/orca-orchestrator/SKILL.md",
+	".claude/skills/orca-dream/SKILL.md",
+	".claude/agents/orca-worker.md",
+}
+
+// orcaOldFiles are what older kits installed and this one replaced: the
+// scripts by wj plan and wj verify, the worker skill by the orca-worker
+// subagent. They go when the skills are refreshed. A folder's files are listed
+// before the folder's own, so each empty folder can be removed on the way.
+var orcaOldFiles = []string{
 	".claude/skills/orca-orchestrator/scripts/plan.ps1",
-	".claude/skills/orca-stateless-worker/SKILL.md",
 	".claude/skills/orca-stateless-worker/scripts/fast_verify.ps1",
-	".agents/skills/orca-orchestrator/SKILL.md",
-	".agents/skills/orca-orchestrator/scripts/plan.ps1",
-	".agents/skills/orca-stateless-worker/SKILL.md",
-	".agents/skills/orca-stateless-worker/scripts/fast_verify.ps1",
+	".claude/skills/orca-stateless-worker/SKILL.md",
 }
 
 func planConvert(out io.Writer, root, text string, dry bool) error {
@@ -608,14 +668,15 @@ func planConvert(out io.Writer, root, text string, dry bool) error {
 	}
 	var refresh []string
 	for _, rel := range orcaSkillFiles {
-		kit, err := kitFS.ReadFile(kitBase + "/" + rel)
+		kit, err := kitFS.ReadFile(kitSource(rel))
 		if err != nil {
 			return err
 		}
 		path := filepath.Join(root, filepath.FromSlash(rel))
 		old, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
-			if !isDir(filepath.Dir(filepath.Dir(filepath.Dir(path)))) {
+			// A project without .claude/ never had the skills: don't add them here.
+			if !isDir(filepath.Join(root, ".claude")) {
 				continue
 			}
 		} else if err != nil {
@@ -628,6 +689,13 @@ func planConvert(out io.Writer, root, text string, dry bool) error {
 	for _, rel := range refresh {
 		fmt.Fprintln(out, "Cập nhật skill:", rel)
 	}
+	var obsolete []string
+	for _, rel := range orcaOldFiles {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			obsolete = append(obsolete, rel)
+			fmt.Fprintln(out, "Xoá file của kit cũ (kit mới không dùng nữa):", rel)
+		}
+	}
 	if dry {
 		fmt.Fprintln(out, "Dry run: không ghi file.")
 		return nil
@@ -638,12 +706,17 @@ func planConvert(out io.Writer, root, text string, dry bool) error {
 		}
 	}
 	for _, rel := range refresh {
-		kit, _ := kitFS.ReadFile(kitBase + "/" + rel)
+		kit, _ := kitFS.ReadFile(kitSource(rel))
 		if err := writeFile(filepath.Join(root, filepath.FromSlash(rel)), string(kit), false); err != nil {
 			return err
 		}
 	}
-	fmt.Fprintln(out, "Xong. File cũ được sao lưu cạnh nó (.bak-<giờ>). Commit PLAN.md và .claude/ .agents/ trước khi chạy worker.")
+	for _, rel := range obsolete {
+		if err := removeOldFile(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintln(out, "Xong. File cũ được sao lưu cạnh nó (.bak-<giờ>). Commit PLAN.md và .claude/ trước khi chạy worker.")
 	return nil
 }
 
