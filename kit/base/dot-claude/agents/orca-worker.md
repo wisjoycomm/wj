@@ -1,26 +1,21 @@
 ---
-name: orca-stateless-worker
-description: Execute exactly one task from PLAN.md as a parallel worker in an Orca git worktree, verify it, and reply with a one-line handover. Use when the prompt names a task ID such as T-01 to work on.
-argument-hint: <TASK_ID>
-arguments: [task_id]
-allowed-tools: Edit Write Bash(pwsh -NoProfile -NonInteractive -File .claude/skills/orca-stateless-worker/scripts/fast_verify.ps1 *)
+name: orca-worker
+description: Executes exactly one PLAN.md task in its own git worktree, verifies it, commits it on the worktree's branch and replies with a one-line handover. Only for the orchestrator, which passes the task's PLAN.md row.
+tools: Read, Grep, Glob, Edit, Write, Bash
+isolation: worktree
+permissionMode: acceptEdits
 ---
 
-# Orca worker: one task, verify, report, stop
-
-Your task: **$task_id**. If that is not an ID like `T-01`, use the task ID from the prompt. If there is none, reply
-`TASK: ? | STATUS: BLOCKED | FILES: - | SUMMARY: no task ID given` and stop.
+# Orca worker: one task, verify, commit, report, stop
 
 You are one of several workers running at the same time, each in its own git worktree on its own branch.
 You can't see the other workers' changes; they are merged later. Keep the change small, scoped and verified.
 
-## 1. Load only your task
-- PLAN.md is one table, one row per task:
-  `| ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |`.
-  Grep `PLAN.md` for `| $task_id |` and read only that one line.
-- Note its **Scope**, **Verify** and **Depends**.
-- If any Depends ID still has a row in your copy of PLAN.md, it hasn't been merged yet and its code is not in this
-  worktree: report BLOCKED with `depends on <ID>` and stop. (Merged tasks are moved out of PLAN.md to PLAN-ARCHIVE.md.)
+## 1. Your task
+The prompt is one PLAN.md row:
+`| ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |`.
+Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or no ID like `T-01`, reply
+`TASK: ? | STATUS: BLOCKED | FILES: - | SUMMARY: no task row given` and stop.
 
 ## 2. Find, then read
 - Locate code with Grep/Glob. Read only the line ranges you need.
@@ -30,13 +25,14 @@ You can't see the other workers' changes; they are merged later. Keep the change
 - Edit existing files; use Write only for new files, and only inside Scope.
 - Unity: `.meta` files next to in-scope files are fine.
 - If the task truly needs a change outside Scope, keep it minimal and name the file in SUMMARY as `+out-of-scope: <path>`.
-- Never edit PLAN.md. Never commit, push, stash, reset or clean: leave your changes uncommitted for review.
+- AGENTS.md, CLAUDE.md, PLAN-ARCHIVE.md and `.claude/` are shared by every worker: change them only when Scope names them.
+- Never edit PLAN.md. Scratch files go in `.tmp/`.
 
 ## 4. Verify
-From the worktree root run (for Unity projects set the Bash timeout to 600000):
+From your worktree's root run (for Unity projects set the Bash timeout to 600000):
 
 ```
-pwsh -NoProfile -NonInteractive -File .claude/skills/orca-stateless-worker/scripts/fast_verify.ps1 -TaskId $task_id
+wj verify <ID>
 ```
 
 Act on the **last line** of the output:
@@ -49,9 +45,22 @@ Act on the **last line** of the output:
 
 Also:
 - A `WARN out-of-scope:` line means you touched a file outside Scope: revert that change unless step 3's exception applies.
+- A `WARN shared file:` line means you changed a shared file in a task with no Scope: revert it unless the task is about that file.
 - If the command times out, rerun it once (a fresh Unity worktree imports slowly). A second timeout means BLOCKED `verify timeout`.
+- If `wj` is not found, report BLOCKED with `wj not installed`.
 
-## 5. Report and stop
+## 5. Commit on your branch
+Only after `VERIFY: PASS` (or for a PARTIAL result whose finished part passed):
+
+```
+git add -A
+git commit -m "<ID>: <what changed, under 70 characters>"
+```
+
+The commit stays on your worktree's branch for review. Never push, merge, rebase, reset, stash or switch branches.
+When you report BLOCKED, don't commit: leave the changes in the worktree.
+
+## 6. Report and stop
 Your final message is exactly one line, with no greeting and no explanation:
 
 ```

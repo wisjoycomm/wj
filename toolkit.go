@@ -44,6 +44,10 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 		return runDoctor(args[1:], input, out)
 	case "plan":
 		return runPlan(args[1:], out)
+	case "verify":
+		return runVerify(args[1:], out)
+	case "digest":
+		return runDigest(args[1:], out)
 	case "init":
 		return runInit(args[1:], input, out)
 	case "usage":

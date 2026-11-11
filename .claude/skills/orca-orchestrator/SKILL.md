@@ -1,30 +1,32 @@
 ---
 name: orca-orchestrator
-description: Act as the orchestrator for parallel Orca workers - plan tasks into PLAN.md, hand out worker launch commands, and record their handover lines. Use only when invoked as /orca-orchestrator.
-argument-hint: [goal or handover lines]
+description: Act as the orchestrator for parallel workers - plan tasks into PLAN.md, run them as orca-worker subagents in git worktrees, record their handover lines, and merge on request. Use only when invoked as /orca-orchestrator.
+argument-hint: [goal | go | merge T-01 T-02]
 disable-model-invocation: true
+allowed-tools: Bash(wj plan *) Agent(orca-worker)
 ---
 
 # Orca orchestrator
 
-You are the orchestrator for this repo, running in the main repo folder (not a worker worktree).
-You plan and track; you don't implement tasks yourself.
-Workers (Claude Code, Codex or agy) run in parallel in Orca worktrees and reply with one handover line.
+You are the orchestrator for this repo. You plan and track; you don't implement tasks yourself.
+Workers are `orca-worker` subagents: each runs one task in its own git worktree, commits it on that worktree's
+branch and replies with one handover line.
 
 Input for this turn: $ARGUMENTS
-- If it is a goal: do step 1, then step 2.
-- If it contains `TASK: ... | STATUS: ...` lines: do step 3.
-- If it says branches are merged: do step 4, then step 2.
-- If it is empty: do step 2.
+- If it is a goal: do step 1, show me the new rows, and stop. I check the plan before any worker starts.
+- If it is `go`, or empty: do step 2.
+- If it says to merge (`merge`, `merge T-01 T-02`), or that I merged: do step 4, then step 2.
+
+A worker's result arrives by itself when it finishes: do step 3 for it then.
 
 ## PLAN.md format (strict)
 PLAN.md is ONE Markdown table and nothing else: no title, no comments, no lists, no text before or after it.
-Scripts read it line by line, so any other text breaks them.
+`wj` reads it line by line, so any other text breaks it.
 
 ```
 | ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T-01 | Discount code in cart total | P1 | 3 | DOING | claude | - | `src/lib/cart.ts`, `src/lib/cart.test.ts` | - | - | wt-cart |
+| T-01 | Discount code in cart total | P1 | 3 | DONE | claude | - | `src/lib/cart.ts`, `src/lib/cart.test.ts` | - | Added discount to total | worktree-agent-a1b2c3 |
 ```
 
 | Column | Allowed values |
@@ -34,12 +36,12 @@ Scripts read it line by line, so any other text breaks them.
 | Pri | `P0` urgent, `P1` high, `P2` normal, `P3` later |
 | SP | Story points, agile scale: `1` `2` `3` `5` `8` `13`, or `?` not estimated. 8+ means split it. |
 | Status | `TODO` `DOING` `DONE` (not merged yet) `BLOCKED` `PARTIAL` |
-| Agent | `claude` `codex` `agy` |
+| Agent | `claude`, or `claude:<model>` to run the worker on a named model, e.g. `claude:haiku` |
 | Depends | IDs separated by commas, or `-` |
 | Scope | Paths in backticks separated by commas, or `-` |
 | Verify | One non-interactive command in backticks, or `-` to auto-detect |
 | Notes | Max 100 characters, or `-` |
-| Session | The Orca worktree/session working on it, or `-` |
+| Session | The branch the worker committed on, or `-` |
 
 No cell may contain `|` or a line break. Use `-` for an empty cell.
 Backlog work is a normal row with Status `TODO` and Pri `P3`.
@@ -48,17 +50,17 @@ Backlog work is a normal row with Status `TODO` and Pri `P3`.
 Never read the whole PLAN.md or PLAN-ARCHIVE.md. Get the state with:
 
 ```
-pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/plan.ps1
+wj plan
 ```
 
-It prints the next ID, the active tasks with their line numbers, READY (highest priority first, with launch
-commands), WAITING and FORMAT problems. Fix every FORMAT line before anything else (`wj plan check` explains each).
+It prints the next ID, the active tasks with their line numbers, READY (highest priority first), WAITING and
+FORMAT problems. Fix every FORMAT line before anything else.
 
-For finished tasks, query PLAN-ARCHIVE.md with the same script instead of reading it:
+For finished tasks, query PLAN-ARCHIVE.md instead of reading it:
 
 ```
-pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/plan.ps1 -Archive             # last 20
-pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/plan.ps1 -Archive -Find T-12  # one ID or text
+wj plan log               # last 20 archived tasks
+wj plan log -find T-12    # one ID, or text in Task or Notes
 ```
 
 ## Editing PLAN.md
@@ -70,22 +72,58 @@ pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/p
 ## 1. Plan
 - Turn the goal into tasks. Each task is one row. Keep each task small (1-3 files, SP 1-5).
 - Set Pri from what I asked for first; set SP from size and risk.
+- Set Agent from the task, so a cheap model does the simple work:
+
+  | Task | Agent |
+  |---|---|
+  | SP 1-2 and fully specified: a rename, a small fix, a test for existing behavior, docs | `claude:haiku` |
+  | SP 3-5: ordinary feature or bug work | `claude:sonnet` |
+  | Risky or unclear whatever its size: concurrency, security, data migration, a change across modules | `claude:opus` |
+
+  If I named models for this project, use my names instead. Plain `claude` means the model this session runs on.
+- A task that came back BLOCKED after a real attempt goes up one step (haiku -> sonnet -> opus) when you relaunch it.
 - Tasks that can run at the same time must not share files or folders in Scope.
 - Find the right files with Grep/Glob before writing Scope. Don't read whole files.
 
 ## 2. Launch
-- Run plan.ps1. For each READY task you launch, set Status `DOING` and Session to the worktree name.
-- Commit PLAN.md (plus AGENTS.md, CLAUDE.md, .claude/ and .agents/ if they changed) so new worktrees see them.
-- Give me the READY launch commands exactly as plan.ps1 printed them (without the `#` comments).
+- Run `wj plan`. Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
+- For each one, set Status `DOING`.
+- Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
+  last commit, so a worker only sees what is committed.
+- Start all of them in one message, one Agent call per task:
+  - `subagent_type`: `orca-worker`
+  - `description`: the ID and a few words, e.g. `T-01 cart discount`
+  - `prompt`: that task's PLAN.md row, the whole line, nothing else
+  - `model`: only when Agent is `claude:<model>`; pass `<model>`
+- Workers run in the background. Tell me which ones started, then end your turn: don't wait or poll.
 
 ## 3. Record
-- For each handover line: PASS -> Status `DONE`; BLOCKED -> `BLOCKED`; partly done -> `PARTIAL`.
-  Put the SUMMARY (cut to 100 characters) in Notes. Keep Session.
+When a worker finishes, its result ends with a handover line and names its worktree branch.
+- PASS -> Status `DONE`; BLOCKED -> `BLOCKED`; PARTIAL -> `PARTIAL`.
+  Put the SUMMARY (cut to 100 characters) in Notes and the branch in Session (`-` if the result names none).
+- A result with no handover line (the worker stopped early) is `BLOCKED` with Notes `no handover line`.
 - For each BLOCKED task, suggest one fix: adjust Scope or Verify, split the task, or add a dependency.
-- Remind me to merge the DONE branches in Orca.
+- When every worker you started has reported, show me the changed rows and, for each DONE or PARTIAL task, the
+  command to review it: `git --no-pager diff HEAD...<branch>`. Never merge on your own.
 
-## 4. Archive after merge
-- When I say branches are merged, archive those `DONE`/`PARTIAL` rows with the merge commit:
+## 4. Merge and archive
+Only when I say so. `merge` alone means every `DONE` task; otherwise only the tasks I name.
+- For each task, merge its branch into the current branch:
+
+  ```
+  git merge --no-ff <branch> -m "Merge <ID>: <Task>"
+  ```
+
+  On a conflict run `git merge --abort`, set that task `BLOCKED` with Notes `merge conflict: <file>`, and go on
+  with the other tasks.
+- After a clean merge, remove the worker's worktree and branch (find the folder with `git worktree list`):
+
+  ```
+  git worktree remove <folder>
+  git branch -d <branch>
+  ```
+
+- Archive the merged rows. If I merged them myself, start here:
 
   ```
   wj plan archive T-01 T-02              # finds each task's newest commit naming its ID in git log
@@ -100,18 +138,18 @@ pwsh -NoProfile -NonInteractive -File .claude/skills/orca-orchestrator/scripts/p
 
 ## Rules
 - Only you edit PLAN.md. Don't edit source files. Don't push.
-- Keep replies short: the changed rows plus the next commands, nothing else.
+- Keep replies short: the changed rows plus what happens next, nothing else.
 
 ## Reply example
 
 ```
-| ID   | Pri | SP | Status | Agent  | Task                        | Session  |
-|------|-----|----|--------|--------|-----------------------------|----------|
-| T-01 | P1  | 3  | DOING  | claude | Discount code in cart total | wt-cart  |
-| T-02 | P0  | 2  | DOING  | codex  | Rate-limit login route      | wt-login |
-| T-03 | P2  | 3  | TODO   | claude | Discount line in checkout   | -        |
+| ID   | Pri | SP | Status | Agent        | Task                        | Session               |
+|------|-----|----|--------|--------------|-----------------------------|-----------------------|
+| T-01 | P1  | 3  | DONE   | claude       | Discount code in cart total | worktree-agent-a1b2c3 |
+| T-02 | P0  | 2  | BLOCKED| claude:haiku | Rate-limit login route      | -                     |
+| T-03 | P2  | 3  | TODO   | claude       | Discount line in checkout   | -                     |
 
-Committed PLAN.md. Start:
-/orca-stateless-worker T-01
-$orca-stateless-worker T-02
+T-01 review: git --no-pager diff HEAD...worktree-agent-a1b2c3
+T-02 blocked (3x FAIL test_rate_limit): the test needs Redis; suggest Verify `npm test -- --grep login`.
+Say `merge T-01` when it looks right.
 ```

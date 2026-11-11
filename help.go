@@ -40,6 +40,8 @@ LỆNH HAY DÙNG
   wj check                       so cấu hình giữa các agent (chỉ đọc)
   wj doctor                      tự kiểm tra máy, báo vấn đề, sửa (-dry-run chỉ báo, -ai nhờ AI gợi ý)
   wj plan                        PLAN.md một bảng: task sẵn sàng, check format, convert kiểu cũ
+  wj verify T-01                 worker: kiểm tra một task trong worktree
+  wj digest                      lỗi lặp lại trong các phiên Claude Code của project (cho /orca-dream)
   wj update                      cập nhật chính tool này
   wj version                     xem phiên bản
 
@@ -223,17 +225,26 @@ const helpInit = `SETUP BAN ĐẦU CHO MỘT PROJECT
   wj init                     hỏi loại job (tự phát hiện sẵn), cài rule + skill Orca
   wj init -type unity         chọn sẵn; nhiều loại thì: -type unity,web
   wj init -dry-run            xem trước, không ghi gì
+  wj init -update             project cài bằng kit cũ: lấy skill mới, bỏ script .ps1 và skill worker cũ
 
 Loại job: unity, web, go, python. Luôn có rule chung cho mọi agent.
 
-Tool cài:
-  AGENTS.md              rule chung + rule theo job (Claude, Codex, Antigravity đều đọc)
-  CLAUDE.md, PLAN.md     ghi chú riêng cho Claude, kế hoạch task cho Orca
-  .claude/, .agents/     skill Orca và quyền chạy lệnh
-  .gitignore             .tmp/ và thư mục build của job
+Tool cài (cho Claude Code):
+  AGENTS.md              rule chung + rule theo job
+  CLAUDE.md, PLAN.md     ghi chú riêng cho Claude Code, kế hoạch task
+  .claude/               skill /orca-orchestrator và /orca-dream, subagent orca-worker,
+                         quyền chạy lệnh, và file cấm đọc (lockfile, cache, .env)
+  .claude/settings.local.json   memory của Claude Code nằm trong project (.claude/memory/),
+                         không còn ở ~/.claude. File này không vào git: mỗi worktree chạy wj init một lần
+  .gitignore             .tmp/, memory, worktree của worker, thư mục build của job
+
+Skill và worker gọi wj plan, wj verify, wj digest, nên máy phải có wj.
+Cách dùng: /orca-orchestrator <mục tiêu> để chia task, rồi /orca-orchestrator go để chạy
+worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: docs/project.md.
 
 An toàn khi chạy lại:
   - File đã có thì giữ nguyên, kể cả skill bạn đã sửa; tool chỉ báo là khác bản kit.
+    Riêng skill Orca: -update thay bằng bản kit, bản cũ sao lưu .bak-<giờ>.
   - AGENTS.md: chỉ cập nhật phần nằm giữa dấu wj:begin / wj:end, phần bạn tự viết giữ nguyên.
   - settings.json và .gitignore: chỉ thêm, không xóa; lệnh bạn đã chặn vẫn bị chặn.
 
@@ -284,6 +295,10 @@ func printHelp(args []string, input io.Reader, out io.Writer) error {
 		fmt.Fprintln(out, doctorHelp)
 	case "plan":
 		fmt.Fprintln(out, planHelp)
+	case "verify":
+		fmt.Fprintln(out, verifyHelp)
+	case "digest", "dream":
+		fmt.Fprintln(out, digestHelp)
 	case "words", "terms", "tu":
 		fmt.Fprintln(out, helpWords)
 	case "flags", "all":
