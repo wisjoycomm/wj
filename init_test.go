@@ -355,3 +355,23 @@ func TestAddToWjBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestInitWritesKitVersion(t *testing.T) {
+	old := buildVersion
+	buildVersion = "0.2.3\n"
+	t.Cleanup(func() { buildVersion = old })
+	root := t.TempDir()
+	runInitIn(t, root, "-type", "go")
+	path := filepath.Join(root, ".claude", "wj-kit")
+	if got := readText(t, path); got != "0.2.3\n" {
+		t.Fatalf("wj-kit = %q", got)
+	}
+	buildVersion = "0.2.4"
+	if out := runInitIn(t, root, "-type", "go"); !strings.Contains(out, "wj init -update") || readText(t, path) != "0.2.3\n" {
+		t.Errorf("version changed without -update:\n%s", out)
+	}
+	runInitIn(t, root, "-type", "go", "-update")
+	if got := readText(t, path); got != "0.2.4\n" {
+		t.Errorf("wj-kit after -update = %q", got)
+	}
+}

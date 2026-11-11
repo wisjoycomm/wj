@@ -16,6 +16,10 @@ Days to look back: $ARGUMENTS (use 7 if that is empty).
 
 ## 1. Get the digest
 
+This skill needs `wj`: transcripts are too big to read by hand. Run `wj version` and read `.claude/wj-kit`.
+If `wj` is not found, or is older than that number, reply in one line (`/orca-dream needs wj: install it, or
+run wj update`) and stop.
+
 ```
 wj digest -days 7
 ```
