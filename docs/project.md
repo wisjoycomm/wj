@@ -28,8 +28,10 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
   trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
 
-Skill và worker gọi `wj plan`, `wj verify`, `wj digest`, nên máy cần có `wj` (không cần `pwsh`). Project cài bằng
-kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
+`wj` là phần phụ, không bắt buộc. Skill và worker gọi `wj plan`, `wj verify`; máy không có `wj` (hoặc `wj` cũ hơn số
+ghi trong `.claude/wj-kit`) thì chúng làm tay các bước đó, tốn token hơn. Riêng `/orca-dream` cần `wj digest`.
+`wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này); `wj init -update` ghi lại số mới.
+Project cài bằng kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
 `orca-stateless-worker` cũ. `CLAUDE.md` đã có thì tool không sửa; muốn lấy bản mới thì xoá file rồi chạy lại `wj init`.
 
 Xong thì commit các file này, vì worktree của worker chỉ thấy file đã commit, rồi mở lại Claude Code để nó nhận

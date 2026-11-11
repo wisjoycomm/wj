@@ -6,7 +6,7 @@ Parallel workers are `orca-worker` subagents, each in its own git worktree; they
 ## Read less
 - Find before you read: locate files and symbols first, then read only the lines you need. Don't read whole files over ~200 lines.
 - Never read lockfiles, generated files, build output or caches.
-- Never read or search `PLAN-ARCHIVE.md`. For an old task run `wj plan log -find T-12`.
+- Never read or search `PLAN-ARCHIVE.md`. For an old task run `wj plan log -find T-12` (no wj: Grep the ID in it with `head_limit` 5).
 
 ## Edit, don't rewrite
 - Change existing files with small targeted edits or patches, never by rewriting the whole file. Create whole files only when they are new.

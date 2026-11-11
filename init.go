@@ -207,8 +207,38 @@ func planInit(root string, stacks []string, update bool) ([]initChange, error) {
 		}
 		changes = append(changes, change)
 	}
+	if change, ok := planKitVersion(root, update); ok {
+		changes = append(changes, change)
+	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].path < changes[j].path })
 	return append(changes, old...), nil
+}
+
+// kitVersionFile records the wj version that installed the kit. The skills
+// read it: a wj older than this number may lack a command they call, so they
+// fall back to doing the step by hand.
+const kitVersionFile = ".claude/wj-kit"
+
+// planKitVersion writes the running wj's version to kitVersionFile: on first
+// install, and on -update. A dev build (no version) writes nothing.
+func planKitVersion(root string, update bool) (initChange, bool) {
+	version := strings.TrimSpace(buildVersion)
+	if version == "" {
+		return initChange{}, false
+	}
+	path := filepath.Join(root, filepath.FromSlash(kitVersionFile))
+	old, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return initChange{path: path, text: version + "\n", write: true, status: "tạo (wj " + version + ")"}, true
+	case err != nil:
+		return initChange{}, false
+	case strings.TrimSpace(string(old)) == version:
+		return initChange{path: path, status: "đã đúng"}, true
+	case update:
+		return initChange{path: path, text: version + "\n", write: true, status: "cập nhật (wj " + version + ")"}, true
+	}
+	return initChange{path: path, status: "giữ nguyên (kit từ wj " + strings.TrimSpace(string(old)) + ") - lấy bản mới: wj init -update"}, true
 }
 
 // planCopy never overwrites: a file already in the project is the user's.
