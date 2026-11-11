@@ -461,19 +461,46 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 	if len(missing) == 0 {
 		return initChange{path: path, status: "đã đúng"}, nil
 	}
-	text := string(data)
-	if text != "" && !strings.HasSuffix(text, "\n") {
-		text += "\n"
-	}
-	if text != "" {
-		text += "\n"
-	}
-	text += "# wj init\n" + strings.Join(missing, "\n") + "\n"
+	text := addToWjBlock(string(data), missing)
 	status := "tạo"
 	if hasFile {
 		status = fmt.Sprintf("thêm %d dòng", len(missing))
 	}
 	return initChange{path: path, text: text, write: true, status: status}, nil
+}
+
+// addToWjBlock appends lines to the file's "# wj init" block, so running init
+// again (or after an update) never stacks a new header. A file without one
+// gets the block at the end. The file's own line ending is kept.
+func addToWjBlock(text string, lines []string) string {
+	eol := "\n"
+	if strings.Contains(text, "\r\n") {
+		eol = "\r\n"
+	}
+	rows := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if len(rows) > 0 && rows[len(rows)-1] == "" {
+		rows = rows[:len(rows)-1]
+	}
+	header := -1
+	for i, row := range rows {
+		if strings.TrimSpace(row) == "# wj init" {
+			header = i
+		}
+	}
+	if header < 0 {
+		if len(rows) > 0 {
+			rows = append(rows, "")
+		}
+		rows = append(rows, "# wj init")
+		rows = append(rows, lines...)
+	} else {
+		end := header + 1
+		for end < len(rows) && strings.TrimSpace(rows[end]) != "" {
+			end++
+		}
+		rows = append(rows[:end], append(append([]string{}, lines...), rows[end:]...)...)
+	}
+	return strings.Join(rows, eol) + eol
 }
 
 func applyInit(root string, stacks []string, changes []initChange, dry bool, out io.Writer) error {
