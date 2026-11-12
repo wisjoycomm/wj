@@ -1,18 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
-    "CLAUDE_CODE_GLOB_NO_IGNORE": "false"
-  },
-  "worktree": {
-    "baseRef": "head"
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
+    "BASH_MAX_OUTPUT_LENGTH": "15000"
   },
   "permissions": {
     "defaultMode": "acceptEdits",
     "allow": [
-      "Agent(orca-worker)",
-      "Bash(wj plan *)",
-      "Bash(wj verify *)",
-      "Bash(wj digest *)",
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git status)",
@@ -30,8 +24,7 @@
     "deny": [
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
-      "Bash(git clean *)",
-      "Read(/PLAN-ARCHIVE.md)"
+      "Bash(git clean *)"
     ]
   }
 }

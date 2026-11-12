@@ -1,0 +1,29 @@
+{
+  "worktree": {
+    "baseRef": "head"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v wj >/dev/null 2>&1 && wj guard || true"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Agent(orca-worker)",
+      "Bash(wj plan *)",
+      "Bash(wj verify *)",
+      "Bash(wj digest *)"
+    ],
+    "deny": [
+      "Read(/PLAN-ARCHIVE.md)"
+    ]
+  }
+}

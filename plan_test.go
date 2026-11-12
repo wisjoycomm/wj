@@ -202,7 +202,7 @@ func TestPlanConvertBacksUpAndRefreshesSkills(t *testing.T) {
 }
 
 func TestKitPlanIsAnEmptyStrictTable(t *testing.T) {
-	data, err := kitFS.ReadFile(kitBase + "/PLAN.md")
+	data, err := kitFS.ReadFile(kitOrca + "/PLAN.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestPlanArchiveKeepsCommit(t *testing.T) {
 }
 
 func TestKitArchiveHeaderMatchesArchiveCommand(t *testing.T) {
-	data, err := kitFS.ReadFile(kitBase + "/PLAN-ARCHIVE.md")
+	data, err := kitFS.ReadFile(kitOrca + "/PLAN-ARCHIVE.md")
 	if err != nil {
 		t.Fatal(err)
 	}

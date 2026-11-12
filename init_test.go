@@ -57,7 +57,7 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 	}
 	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
 	for _, want := range []string{"Bash(wj verify *)", "Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
-		"CLAUDE_CODE_GLOB_NO_IGNORE", `"baseRef": "head"`} {
+		"CLAUDE_CODE_GLOB_NO_IGNORE", `"baseRef": "head"`, "BASH_MAX_OUTPUT_LENGTH", "&& wj guard || true"} {
 		if !strings.Contains(settings, want) {
 			t.Errorf("settings.json lacks %q", want)
 		}
@@ -151,6 +151,73 @@ func TestInitNeverOverwritesUserFiles(t *testing.T) {
 	}
 	if containsName(doc.Permissions.Allow, "Bash(npm install)") {
 		t.Error("user's deny rule was loosened")
+	}
+}
+
+// -lite installs only what works on a machine without wj. A later full run
+// adds the rest.
+func TestInitLiteNeedsNoWj(t *testing.T) {
+	root := t.TempDir()
+	output := runInitIn(t, root, "-lite", "-type", "web")
+	for _, rel := range []string{"PLAN.md", "PLAN-ARCHIVE.md", ".claude/skills", ".claude/agents"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			t.Errorf("%s must not be in the lite kit", rel)
+		}
+	}
+	for _, rel := range []string{"AGENTS.md", "CLAUDE.md", ".claude/settings.json"} {
+		text := readText(t, filepath.Join(root, filepath.FromSlash(rel)))
+		for _, unwanted := range []string{"wj", "orca", "PLAN"} {
+			if strings.Contains(text, unwanted) && !(rel == "AGENTS.md" && unwanted == "wj") {
+				t.Errorf("%s mentions %q:\n%s", rel, unwanted, text)
+			}
+		}
+	}
+	// In AGENTS.md "wj" is only the block markers.
+	agents := readText(t, filepath.Join(root, "AGENTS.md"))
+	if strings.Contains(strings.ReplaceAll(strings.ReplaceAll(agents, "<!-- wj:begin", ""), "<!-- wj:end", ""), "wj") {
+		t.Errorf("lite AGENTS.md calls wj:\n%s", agents)
+	}
+	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
+	for _, want := range []string{"Read(**/node_modules/**)", "BASH_MAX_OUTPUT_LENGTH", "Bash(git status)", "## Keep output small", "## Web"} {
+		if !strings.Contains(settings+agents, want) {
+			t.Errorf("lite kit lacks %q", want)
+		}
+	}
+	if strings.Contains(settings, "hooks") || !strings.Contains(output, "Bản lite") {
+		t.Errorf("settings:\n%s\noutput:\n%s", settings, output)
+	}
+
+	runInitIn(t, root, "-type", "web")
+	settings = readText(t, filepath.Join(root, ".claude", "settings.json"))
+	agents = readText(t, filepath.Join(root, "AGENTS.md"))
+	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "wj plan") {
+		t.Error("a full run after a lite one must add the Orca layer")
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
+		t.Error("worker subagent missing after the full run")
+	}
+}
+
+// A project that already has hooks gets the guard added next to them, once.
+func TestInitAddsGuardHookNextToUserHooks(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".claude", "settings.json")
+	writeTestFile(t, path, `{"hooks":{
+		"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"my-check"}]}],
+		"PreCompact":[{"hooks":[{"type":"command","command":"my-notes"}]}]}}`)
+	runInitIn(t, root)
+	output := runInitIn(t, root)
+	settings := readText(t, path)
+	for _, want := range []string{"my-check", "my-notes"} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("user hook %q lost:\n%s", want, settings)
+		}
+	}
+	if strings.Count(settings, "wj guard") != 1 {
+		t.Errorf("guard hook must be there once:\n%s", settings)
+	}
+	if !strings.Contains(output, "đã đúng") {
+		t.Errorf("second run changed settings:\n%s", output)
 	}
 }
 

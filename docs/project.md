@@ -8,32 +8,82 @@ wj init                    tự nhận job, hoặc hỏi
 wj init -type unity,web    chọn job
 wj init -dry-run           xem trước
 wj init -update            project cài bằng kit cũ: lấy skill Orca mới
+wj init -lite              chỉ phần không cần wj (xem "Hai mức" bên dưới)
 ```
 
 Job có sẵn: `unity`, `web`, `go`, `python`.
+
+### Hai mức: đủ và lite
+
+Kit có hai lớp, cùng một nguồn (`kit/base` và `kit/orca`):
+
+| Mức | Có gì | Cần `wj` trên máy? |
+|---|---|---|
+| Lite (`wj init -lite`) | `AGENTS.md`, `CLAUDE.md`, rule theo job, `.gitignore`, và `.claude/settings.json` với file cấm đọc, giới hạn output Bash, quyền git | Không |
+| Đủ (`wj init`) | Lite + hook `wj guard`, skill `/orca-orchestrator` và `/orca-dream`, subagent `orca-worker`, `PLAN.md` | Có |
+
+- Lite vẫn tiết kiệm token nhờ thứ Claude Code tự cưỡng chế (rule deny, giới hạn output). Nó không có: chặn đọc cả
+  file dài, chặn đường vòng qua shell (`cat .env`), và chạy task song song.
+- Người không cài `wj`: mỗi bản release có `wj-kit-lite-<job>.zip` (`general`, `unity`, `web`, `go`, `python`), do
+  chính `wj init -lite` sinh ra. Giải nén vào gốc project **mới**. Project đã có `AGENTS.md`, `.gitignore` hay
+  `.claude/settings.json` thì đừng giải nén đè: gộp tay, vì zip không biết gộp như `wj init`.
+- Nâng từ lite lên đủ: cài `wj` rồi chạy `wj init`. Tool chỉ thêm phần còn thiếu.
+- Repo cài mức đủ, nhưng một người trong nhóm không có `wj`: hook tự bỏ qua (không báo lỗi, không chặn gì), rule
+  và file cấm đọc vẫn có tác dụng. Skill Orca thì không chạy được, và model được dặn báo "thiếu wj" rồi dừng.
 
 Kit nhắm vào Claude Code. Tool thêm rule chung, rule theo job, `PLAN.md`, `PLAN-ARCHIVE.md` (bảng trống),
 `.claude/settings.json`, `.gitignore`, hai skill (`/orca-orchestrator`, `/orca-dream`) và subagent `orca-worker`.
 Chạy lại nhiều lần được: file đã có không bị ghi đè, còn rule trong `AGENTS.md` nằm giữa hai dấu
 `<!-- wj:begin -->` nên phần tự viết được giữ nguyên.
 
-`.claude/settings.json` có bốn phần, và tool chỉ thêm, không xoá:
+`.claude/settings.json` có năm phần, và tool chỉ thêm, không xoá:
 
 - `allow`: việc chạy không cần hỏi (`wj plan`, `wj verify`, `wj digest`, git chỉ đọc, `git add`, `git commit`,
   subagent `orca-worker`, lệnh test của job). `git push` vẫn hỏi.
 - `deny`: file Claude Code không được đọc. Luật "đừng đọc" trong `AGENTS.md` chỉ là lời nhắc; ở đây harness
   chặn hẳn: `PLAN-ARCHIVE.md`, lockfile, `node_modules/`, `.venv/`, `.env`, và `Library/` `Temp/` `Logs/` của Unity
-  (tuỳ job). Muốn mở lại một mục thì xoá dòng đó khỏi `deny`.
-- `env`: `CLAUDE_CODE_GLOB_NO_IGNORE=false` để Glob bỏ qua file gitignore như Grep.
+  (tuỳ job), `go.sum` và `vendor/` của Go. Rule viết dạng `Read(**/node_modules/**)` nên đúng cả với thư mục
+  nằm sâu trong monorepo. Muốn mở lại một mục thì xoá dòng đó khỏi `deny`.
+- `hooks`: `PreToolUse` gọi `wj guard` trước mỗi lượt Read, Bash, PowerShell (xem mục dưới). Project đã có hook
+  riêng thì tool thêm hook này bên cạnh, không đụng hook cũ.
+- `env`: `CLAUDE_CODE_GLOB_NO_IGNORE=false` để Glob bỏ qua file gitignore như Grep;
+  `BASH_MAX_OUTPUT_LENGTH=15000` để output lệnh dài thành file + 2.000 ký tự đầu (xem [context.md](context.md)).
+  Biến bạn đã đặt thì giữ nguyên giá trị.
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
   trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
 
-Skill và worker gọi `wj plan`, `wj verify`, `wj digest`, nên máy cần có `wj` (không cần `pwsh`). Project cài bằng
+Skill, worker và hook gọi `wj plan`, `wj verify`, `wj digest`, `wj guard`, nên máy cần có `wj` (không cần `pwsh`). Project cài bằng
 kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
 `orca-stateless-worker` cũ. `CLAUDE.md` đã có thì tool không sửa; muốn lấy bản mới thì xoá file rồi chạy lại `wj init`.
 
 Xong thì commit các file này, vì worktree của worker chỉ thấy file đã commit, rồi mở lại Claude Code để nó nhận
 subagent và settings mới.
+
+## Chặn lượt đọc tốn token: wj guard
+
+Luật "đọc ít" trong `AGENTS.md` chỉ là lời nhắc, model có thể bỏ qua. `wj guard` là hook `PreToolUse`: Claude Code
+gọi nó trước mỗi lượt Read, Bash, PowerShell; nếu lượt đó tốn token vô ích thì nó chặn và trả lý do kèm cách làm
+đúng, model tự sửa ở lượt sau. Áp dụng cho cả chat chính, subagent và worker.
+
+| Bị chặn | Model được bảo làm gì |
+|---|---|
+| Read một file dài hơn 500 dòng mà không có `limit`, hoặc `limit` quá 500 | Grep tìm đoạn cần, rồi Read với `offset` + `limit` |
+| `cat` / `type` / `Get-Content` in cả một file dài hơn 500 dòng | như trên |
+| `cat`, `grep`, `rg`, `head`, `tail`, `sed`, `awk`... vào đường dẫn có rule deny `Read(...)` | không đọc, kể cả qua shell |
+
+Không bị chặn: đọc một khoảng (`offset` + `limit`), `cat file | grep ...`, `cat file > file-khác`, `head -n 20`,
+`Get-Content -TotalCount 40`, ảnh, PDF, notebook.
+
+- Rule deny lấy từ `permissions.deny` trong `.claude/settings.json` và `settings.local.json` của project. Claude Code
+  tự chặn tool Read theo các rule này; guard chặn thêm đường vòng qua shell.
+- Đổi ngưỡng: thêm `"WJ_GUARD_MAX_LINES": "800"` vào khối `env` của settings. `0` là bỏ kiểm tra số dòng (rule deny
+  vẫn giữ).
+- Guard không bao giờ làm hỏng phiên: JSON lạ, file không đọc được, lệnh shell phức tạp (here-document, `cd` rồi mới
+  đọc) đều được cho qua. Nó chặn trường hợp rõ ràng, không cố đoán.
+- Lệnh của hook là `command -v wj >/dev/null 2>&1 && wj guard || true`: máy chưa có `wj`, hoặc `wj` bản cũ chưa
+  có lệnh `guard`, thì hook im lặng cho qua. Muốn có guard thì `wj update`.
+- Đã thử thật (Claude Code 2.1.322 trên Windows, 2026-11-12): Read cả file 900 dòng, `cat` file đó và `cat .env`
+  đều bị chặn, model nhận đúng lý do; khi lệnh trong hook không tồn tại thì Read chạy bình thường, không có lỗi hook.
 
 ## Chạy task song song: orchestrator và worker
 
@@ -64,31 +114,53 @@ orchestrator; `haiku` `sonnet` `opus` là bậc, gateway của bạn quyết đ�
 
 ## Memory và dreaming
 
-Memory nằm trong project và không vào git:
+Memory có ba chỗ. Chỗ nháp ở local, bản đã duyệt vào git:
 
-| Ở đâu | Ai ghi | Ai đọc |
-|---|---|---|
-| `.claude/memory/` (ở checkout chính, mọi worktree dùng chung) | Claude Code tự ghi trong phiên chính | Phiên chính |
-| `CLAUDE.local.md` mục `## Lessons` | `/orca-dream`, sau khi bạn duyệt | Mọi phiên và mọi worker |
+| Ở đâu | Vào git? | Ai ghi | Ai đọc |
+|---|---|---|---|
+| `.claude/memory/` (ở checkout chính, mọi worktree dùng chung) | Không | Claude Code tự ghi trong phiên chính. Đây là **hộp nháp**: chưa ai duyệt | Phiên chính (file chỉ mục `MEMORY.md` được nạp ở mọi phiên) |
+| `AGENTS.md` mục `## Lessons` | Có | `/orca-dream`, sau khi bạn duyệt | Mọi phiên, mọi worker, cả nhóm, và mọi CLI đọc `AGENTS.md` |
+| `CLAUDE.local.md` mục `## Lessons` | Không | `/orca-dream`, sau khi bạn duyệt | Mọi phiên và worker trên máy này. Chỉ cho thứ riêng của máy (chỗ cài tool, cổng local) |
 
-`wj init` ghi `autoMemoryDirectory` vào `.claude/settings.local.json` để Claude Code thôi lưu memory dưới
-`~/.claude/projects/`. File này không vào git nên mỗi worktree bạn mở phiên chính cần chạy `wj init` một lần;
-`CLAUDE.local.md` cũng chỉ có ở worktree tạo ra nó. Worker không tự ghi memory: nhiều worker ghi cùng một file sẽ
-đè nhau, và một worker hiểu sai sẽ làm hỏng cả đợt sau.
+- Bài học đã duyệt nằm trong git để có lịch sử và rollback, và để người khác trong nhóm (kể cả người dùng bản
+  lite) cùng có. Viết nó ngoài các khối `wj:begin` / `wj:end`, vì `wj init` ghi lại phần trong khối.
+- `wj init` ghi `autoMemoryDirectory` vào `.claude/settings.local.json` để Claude Code thôi lưu memory dưới
+  `~/.claude/projects/`. File này không vào git nên mỗi worktree bạn mở phiên chính cần chạy `wj init` một lần.
+- Worker không tự ghi memory: nhiều worker ghi cùng một file sẽ đè nhau, và một worker hiểu sai sẽ làm hỏng cả
+  đợt sau.
+- Đã thử (Claude Code 2.1.322, 2026-11-12): subagent chạy trong worktree riêng vẫn nhận được nội dung
+  `CLAUDE.local.md` của phiên chính, dù file không có trong worktree đó.
 
-Một phiên chỉ thấy chính nó, nên không biết năm phiên khác cũng vấp đúng lỗi đó. `/orca-dream` xem lại tất cả:
+Một phiên chỉ thấy chính nó: nó không biết năm phiên khác cũng vấp đúng lỗi đó, và không quay lại xoá ghi chú đã
+sai. `/orca-dream` làm hai việc đó, ngoài phiên làm việc:
 
 ```text
-wj digest                  lỗi tool trong 7 ngày của project: lặp lại, bị từ chối, handover không PASS
+wj digest                  7 ngày của project: lỗi tool lặp lại, bị từ chối, handover không PASS,
+                           rồi danh sách ghi chú memory và độ dài các mục Lessons
 wj digest -days 14
 wj digest -session 1acf    mọi lỗi của một phiên
-/orca-dream                đọc digest, tìm nguyên nhân, đề xuất tối đa 5 thay đổi kèm id phiên làm chứng cứ
+/orca-dream                đọc digest, đề xuất tối đa 5 sửa lỗi + 5 thay đổi memory, kèm chứng cứ
 ```
 
-`wj digest` đọc transcript thay cho model (mỗi file nặng nhiều MB) và tính cả subagent lẫn mọi worktree của repo.
-Lệnh chỉ thấy lệnh thoát với mã lỗi: lỗi bị che sau `| tail` hay `|| true` không được đếm. `/orca-dream` ưu tiên
-cách sửa mà harness cưỡng chế được (quyền trong `settings.json`, lệnh Verify, bước trong `orca-worker.md`) rồi mới
-tới một dòng bài học trong `CLAUDE.local.md`, và không ghi gì trước khi bạn duyệt.
+**Lỗi lặp lại.** `wj digest` đọc transcript thay cho model (mỗi file nặng nhiều MB) và tính cả subagent lẫn mọi
+worktree của repo. Lệnh chỉ thấy lệnh thoát với mã lỗi: lỗi bị che sau `| tail` hay `|| true` không được đếm.
+`/orca-dream` ưu tiên cách sửa mà harness cưỡng chế được (quyền trong `settings.json`, lệnh Verify, bước trong
+`orca-worker.md`) rồi mới tới một dòng bài học.
+
+**Lọc memory.** Mục MEMORY của digest liệt kê mỗi ghi chú một dòng (file, loại, tuổi, số dòng, mô tả), cũ nhất
+trước. `MISSING:` nghĩa là ghi chú nhắc tới một đường dẫn không còn trong project; đây là gợi ý để kiểm tra, không
+phải kết luận. Digest cũng báo dòng chỉ mục trỏ tới file đã mất và ghi chú không có trong chỉ mục. `/orca-dream`
+mở tối đa 10 ghi chú mỗi lần (có `MISSING` trước, rồi cũ nhất) và cho mỗi cái một kết luận:
+
+| Kết luận | Khi nào | Làm gì |
+|---|---|---|
+| SHARE | Quy ước hay cạm bẫy của project, còn đúng, phiên khác và worker cần | Thêm một dòng vào `## Lessons` của `AGENTS.md`, xoá ghi chú |
+| KEEP | Về bạn (vai trò, sở thích), về máy này, hoặc trỏ tới thứ ngoài repo | Không đổi |
+| MERGE | Hai ghi chú nói cùng một điều | Giữ cái tốt hơn, xoá cái kia |
+| DELETE | Nhắc tới thứ đã mất; repo đã ghi sẵn (code, git log, `AGENTS.md`, docs); trạng thái task đã xong | Xoá ghi chú và dòng của nó trong `MEMORY.md` |
+
+Ghi chú loại `user` không bao giờ bị chia sẻ hay xoá khi bạn chưa nói. Mỗi mục `## Lessons` giữ dưới 40 dòng, vì
+dòng nào ở đó cũng tốn token ở mọi phiên. `/orca-dream` không ghi gì trước khi bạn duyệt và không tự commit.
 
 ## Worker kiểm tra task: wj verify
 

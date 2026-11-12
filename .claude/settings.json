@@ -1,7 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
+    "BASH_MAX_OUTPUT_LENGTH": "15000",
     "CLAUDE_CODE_GLOB_NO_IGNORE": "false"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "command -v wj >/dev/null 2>&1 && wj guard || true",
+            "type": "command"
+          }
+        ],
+        "matcher": "Read|Bash|PowerShell"
+      }
+    ]
   },
   "permissions": {
     "allow": [
@@ -38,7 +52,9 @@
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
       "Bash(git clean *)",
-      "Read(/PLAN-ARCHIVE.md)"
+      "Read(/PLAN-ARCHIVE.md)",
+      "Read(**/go.sum)",
+      "Read(**/vendor/**)"
     ]
   },
   "worktree": {

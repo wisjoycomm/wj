@@ -210,8 +210,10 @@ Cách đo chất lượng, so với số liệu 2026-11-09:
 - AGENTS.md của endlesswinter không có dấu `wj:begin` nên không bị đụng tới.
 - Với settings.json, `wj init` chỉ thêm quyền từ kit vào file có sẵn.
 
-Chưa đưa vào kit của `wj init`. Muốn mọi project mới đều có thì thêm vào `kit/base/` (`AGENTS.md`,
-`dot-claude/settings.json`) sau khi thấy hiệu quả ở endlesswinter.
+Đã đưa vào kit của `wj init` (2026-11-12): `BASH_MAX_OUTPUT_LENGTH=15000`, mục **Keep output small** trong
+`AGENTS.md` (bản chung, không có lệnh riêng của job), và hook `wj guard` chặn đọc cả file dài
+(xem [project.md](project.md)). Chưa đưa vào kit: `CLAUDE_CODE_AUTO_COMPACT_WINDOW` và hai hook compact, vì compact
+sớm có rủi ro chất lượng và đang chờ kết quả ở endlesswinter.
 
 Lưu ý: `.claude/settings.json` của endlesswinter được git theo dõi. Worker chạy thành phiên Claude riêng trong
 worktree chỉ có cấu hình này sau khi nó được commit vào nhánh mà worktree tạo ra từ đó. Subagent trong cùng phiên

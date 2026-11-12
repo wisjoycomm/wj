@@ -30,6 +30,9 @@ thay, rồi in bản rút gọn:
   DENIED     lệnh bị hỏi quyền hoặc bị chặn
   HANDOVERS  worker báo BLOCKED hoặc PARTIAL
   SESSIONS   mỗi phiên: số lượt, context lớn nhất, số lỗi
+  MEMORY     ghi chú Claude Code tự ghi (.claude/memory): loại, tuổi, số dòng, và
+             MISSING khi ghi chú nhắc tới đường dẫn không còn trong project
+  LESSONS    số dòng mục "## Lessons" trong AGENTS.md và CLAUDE.local.md, dòng nào MISSING
 
 Tính cả phiên chính, subagent, và mọi worktree của cùng repo. Lệnh chỉ đọc, không
 gửi gì đi đâu. Mỗi dòng có id phiên để trích dẫn.`
@@ -107,6 +110,7 @@ func runDigest(args []string, out io.Writer) error {
 		return report.printSession(out, *session)
 	}
 	report.print(out, filepath.Base(root), *days)
+	printMemory(out, root, time.Now())
 	return nil
 }
 

@@ -19,10 +19,21 @@ import (
 var kitFS embed.FS
 
 const (
-	kitBase     = "kit/base"
-	kitStacks   = "kit/stacks"
-	kitSettings = kitBase + "/dot-claude/settings.json"
+	// The kit has two layers. kit/base is plain files that work on any machine
+	// (wj init -lite installs only this). kit/orca is what calls wj: the plan,
+	// the skills, the worker subagent and the guard hook.
+	kitBase   = "kit/base"
+	kitOrca   = "kit/orca"
+	kitStacks = "kit/stacks"
 )
+
+// kitLayers are the layers of one run, in the order their rules appear.
+func kitLayers(lite bool) []string {
+	if lite {
+		return []string{kitBase}
+	}
+	return []string{kitBase, kitOrca}
+}
 
 // kitTarget is where a kit/base file goes in a project. Folders that start
 // with a dot are stored as dot-<name>, so tools working on this repo don't
@@ -31,12 +42,12 @@ func kitTarget(rel string) string {
 	return strings.TrimPrefix(strings.ReplaceAll("/"+rel, "/dot-", "/."), "/")
 }
 
-// kitSource is the kit/base path of a project file.
+// kitSource is the kit/orca path of a project file wj owns (a skill, the worker).
 func kitSource(rel string) string {
 	if strings.HasPrefix(rel, ".") {
 		rel = "dot-" + rel[1:]
 	}
-	return kitBase + "/" + rel
+	return kitOrca + "/" + rel
 }
 
 // initStack is one kind of job. Its files live in kit/stacks/<id>/: rules.md
@@ -72,11 +83,12 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	types := flags.String("type", "", "loại job, vd unity hoặc web,go (bỏ trống thì tool hỏi)")
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
 	update := flags.Bool("update", false, "thay skill Orca cũ trong project bằng bản của kit (bản cũ sao lưu .bak)")
+	lite := flags.Bool("lite", false, "chỉ cài phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() > 1 {
-		return errors.New("cách dùng: wj init [-type unity,web] [-update] [-dry-run] [thư mục]")
+		return errors.New("cách dùng: wj init [-type unity,web] [-lite] [-update] [-dry-run] [thư mục]")
 	}
 	dir := "."
 	if flags.NArg() == 1 {
@@ -94,11 +106,11 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	changes, err := planInit(root, stacks, *update)
+	changes, err := planInit(root, stacks, *update, *lite)
 	if err != nil {
 		return err
 	}
-	return applyInit(root, stacks, changes, *dry, out)
+	return applyInit(root, stacks, changes, *dry, *lite, out)
 }
 
 // initMenu is the numbered-menu entry: it opens from anywhere, so ask where.
@@ -157,16 +169,58 @@ func detectStacks(root string) []string {
 	return found
 }
 
-func planInit(root string, stacks []string, update bool) ([]initChange, error) {
+func planInit(root string, stacks []string, update, lite bool) ([]initChange, error) {
 	var changes []initChange
-	err := fs.WalkDir(kitFS, kitBase, func(path string, entry fs.DirEntry, err error) error {
+	for _, layer := range kitLayers(lite) {
+		copied, err := planLayer(root, layer, update)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, copied...)
+	}
+	// Removals keep their own order (a folder's files before the folder), after
+	// everything else.
+	var old []initChange
+	if update {
+		for _, rel := range orcaOldFiles {
+			path := filepath.Join(root, filepath.FromSlash(rel))
+			if _, err := os.Stat(path); err == nil {
+				old = append(old, initChange{path: path, remove: true, status: "xoá (kit mới không dùng nữa)"})
+			}
+		}
+	}
+	agents, err := planAgents(root, stacks, lite)
+	if err != nil {
+		return nil, err
+	}
+	settings, err := planSettings(root, stacks, lite)
+	if err != nil {
+		return nil, err
+	}
+	changes = append(changes, agents, settings)
+	for _, plan := range []func(string, []string) (initChange, error){planLocalMemory, planGitignore} {
+		change, err := plan(root, stacks)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, change)
+	}
+	sort.Slice(changes, func(i, j int) bool { return changes[i].path < changes[j].path })
+	return append(changes, old...), nil
+}
+
+// planLayer copies a layer's files. Its rules and settings are merged into the
+// project's own files instead, by planAgents and planSettings.
+func planLayer(root, layer string, update bool) ([]initChange, error) {
+	var changes []initChange
+	err := fs.WalkDir(kitFS, layer, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		if path == kitBase+"/AGENTS.md" || path == kitSettings {
+		rel := kitTarget(strings.TrimPrefix(path, layer+"/"))
+		if rel == "AGENTS.md" || rel == "rules.md" || rel == ".claude/settings.json" {
 			return nil
 		}
-		rel := kitTarget(strings.TrimPrefix(path, kitBase+"/"))
 		data, err := kitFS.ReadFile(path)
 		if err != nil {
 			return err
@@ -186,29 +240,7 @@ func planInit(root string, stacks []string, update bool) ([]initChange, error) {
 		changes = append(changes, change)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	// Removals keep their own order (a folder's files before the folder), after
-	// everything else.
-	var old []initChange
-	if update {
-		for _, rel := range orcaOldFiles {
-			path := filepath.Join(root, filepath.FromSlash(rel))
-			if _, err := os.Stat(path); err == nil {
-				old = append(old, initChange{path: path, remove: true, status: "xoá (kit mới không dùng nữa)"})
-			}
-		}
-	}
-	for _, plan := range []func(string, []string) (initChange, error){planAgents, planSettings, planLocalMemory, planGitignore} {
-		change, err := plan(root, stacks)
-		if err != nil {
-			return nil, err
-		}
-		changes = append(changes, change)
-	}
-	sort.Slice(changes, func(i, j int) bool { return changes[i].path < changes[j].path })
-	return append(changes, old...), nil
+	return changes, err
 }
 
 // planCopy never overwrites: a file already in the project is the user's.
@@ -232,7 +264,7 @@ func normalizeEOL(data []byte) []byte {
 
 // planAgents keeps wj's rules between markers, so a rerun refreshes them and
 // never touches what the user wrote around them.
-func planAgents(root string, stacks []string) (initChange, error) {
+func planAgents(root string, stacks []string, lite bool) (initChange, error) {
 	path := filepath.Join(root, "AGENTS.md")
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -250,8 +282,18 @@ func planAgents(root string, stacks []string) (initChange, error) {
 	} else {
 		note = " - rule chung chưa thêm vì AGENTS.md là file của bạn"
 	}
+	blocks := map[string]string{}
+	ids := append([]string{}, stacks...)
 	for _, id := range stacks {
-		rules, err := kitFS.ReadFile(kitStacks + "/" + id + "/rules.md")
+		blocks[id] = kitStacks + "/" + id + "/rules.md"
+	}
+	if !lite {
+		// The workers need these rules, so they go in like a job's rules do.
+		ids = append([]string{"orca"}, ids...)
+		blocks["orca"] = kitOrca + "/rules.md"
+	}
+	for _, id := range ids {
+		rules, err := kitFS.ReadFile(blocks[id])
 		if err != nil {
 			return initChange{}, err
 		}
@@ -289,7 +331,7 @@ func upsertBlock(text, id, body string) string {
 }
 
 // planSettings only ever adds permission rules; everything else in the file stays.
-func planSettings(root string, stacks []string) (initChange, error) {
+func planSettings(root string, stacks []string, lite bool) (initChange, error) {
 	path := filepath.Join(root, ".claude", "settings.json")
 	doc, err := readConfig(path)
 	if err != nil {
@@ -297,7 +339,10 @@ func planSettings(root string, stacks []string) (initChange, error) {
 	}
 	_, statErr := os.Stat(path)
 	hasFile := statErr == nil
-	sources := []string{kitSettings}
+	var sources []string
+	for _, layer := range kitLayers(lite) {
+		sources = append(sources, layer+"/dot-claude/settings.json")
+	}
 	for _, id := range stacks {
 		sources = append(sources, kitStacks+"/"+id+"/settings.json")
 	}
@@ -378,6 +423,10 @@ func mergeSettings(doc, kit map[string]any) bool {
 		// env: add the variables the user hasn't set; theirs keep their values.
 		have, _ := doc[key].(map[string]any)
 		want, _ := value.(map[string]any)
+		if key == "hooks" && have != nil {
+			added = mergeHooks(have, want) || added
+			continue
+		}
 		if key != "env" || have == nil {
 			continue
 		}
@@ -429,6 +478,53 @@ func mergeSettings(doc, kit map[string]any) bool {
 	return added
 }
 
+// mergeHooks adds the kit's hooks to the events the user already has hooks
+// for. A kit hook whose command is already there, under any matcher, is left
+// as the user set it up.
+func mergeHooks(have, want map[string]any) bool {
+	added := false
+	for event, value := range want {
+		entries, _ := value.([]any)
+		current, isList := have[event].([]any)
+		if _, exists := have[event]; exists && !isList {
+			continue
+		}
+		present := map[string]bool{}
+		for _, entry := range current {
+			for _, command := range hookCommands(entry) {
+				present[command] = true
+			}
+		}
+		for _, entry := range entries {
+			commands := hookCommands(entry)
+			missing := len(commands) > 0
+			for _, command := range commands {
+				missing = missing && !present[command]
+			}
+			if missing {
+				current = append(current, entry)
+				added = true
+			}
+		}
+		have[event] = current
+	}
+	return added
+}
+
+// hookCommands lists the commands of one matcher entry of a hook event.
+func hookCommands(entry any) []string {
+	group, _ := entry.(map[string]any)
+	hooks, _ := group["hooks"].([]any)
+	var commands []string
+	for _, hook := range hooks {
+		fields, _ := hook.(map[string]any)
+		if command, ok := fields["command"].(string); ok {
+			commands = append(commands, command)
+		}
+	}
+	return commands
+}
+
 func planGitignore(root string, stacks []string) (initChange, error) {
 	path := filepath.Join(root, ".gitignore")
 	data, err := os.ReadFile(path)
@@ -442,7 +538,8 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 	}
 	// .claude/worktrees/ is where Claude Code puts each worker subagent's worktree.
 	// Memory stays on this machine: Claude Code's own notes in .claude/memory/,
-	// approved lessons in CLAUDE.local.md.
+	// lessons about this machine in CLAUDE.local.md. Lessons about the project
+	// are committed, in AGENTS.md.
 	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", ".claude/memory/", "CLAUDE.local.md"}
 	for _, id := range stacks {
 		extra, err := kitFS.ReadFile(kitStacks + "/" + id + "/gitignore")
@@ -476,10 +573,13 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 	return initChange{path: path, text: text, write: true, status: status}, nil
 }
 
-func applyInit(root string, stacks []string, changes []initChange, dry bool, out io.Writer) error {
+func applyInit(root string, stacks []string, changes []initChange, dry, lite bool, out io.Writer) error {
 	jobs := "chỉ rule chung"
 	if len(stacks) > 0 {
 		jobs = "rule chung + " + strings.Join(stacks, ", ")
+	}
+	if lite {
+		jobs += ", bản lite"
 	}
 	if dry {
 		fmt.Fprintf(out, "Xem trước, chưa ghi gì: %s (%s)\n", root, jobs)
@@ -510,6 +610,11 @@ func applyInit(root string, stacks []string, changes []initChange, dry bool, out
 			rel = change.path
 		}
 		fmt.Fprintf(out, "  %-62s %s\n", filepath.ToSlash(rel), change.status)
+	}
+	if lite {
+		fmt.Fprintln(out, "\nBản lite: chạy được trên máy không có wj. Không có skill Orca, worker và hook wj guard;")
+		fmt.Fprintln(out, "muốn thêm thì chạy lại wj init (không -lite). Mở lại Claude Code để nó nhận settings mới.")
+		return nil
 	}
 	if !isGitRepo(root) {
 		fmt.Fprintln(out, "\nProject chưa có git. Worker cần git: chạy git init rồi commit các file này.")

@@ -5,6 +5,10 @@
       "Bash(go vet *)",
       "Bash(go build *)",
       "Bash(gofmt -l *)"
+    ],
+    "deny": [
+      "Read(**/go.sum)",
+      "Read(**/vendor/**)"
     ]
   }
 }

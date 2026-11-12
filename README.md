@@ -89,8 +89,16 @@ lockfiles, caches and `.env`) and `.gitignore` entries. It also keeps Claude Cod
 auto memory inside the project (`.claude/memory/`, set through `autoMemoryDirectory`
 in the uncommitted `.claude/settings.local.json`) instead of under `~/.claude`. To add a job,
 add a folder under `kit/stacks/` and an entry in `initStacksList`. The kit keeps
-`.claude/` as `kit/base/dot-claude/`, so Claude Code working on this repo doesn't
+`.claude/` as `dot-claude/`, so Claude Code working on this repo doesn't
 load the kit's skills as its own.
+
+The kit has two layers. `kit/base` is plain files that need nothing installed: rules,
+permissions, `Read` deny rules and the Bash output limit. `kit/orca` is what calls
+`wj`: `PLAN.md`, the skills, the worker subagent and the `wj guard` hook, which blocks
+whole-file reads of long files and shell reads of denied paths. `wj init -lite`
+installs only the first layer, and each release carries it as `wj-kit-lite-<job>.zip`
+for people who don't install `wj`. In a full setup the hook skips itself on a machine
+without `wj`.
 
 Existing files are safe. Files that already exist are kept and reported, including
 edited skills. In `AGENTS.md` only the text between `wj:begin` and `wj:end` markers

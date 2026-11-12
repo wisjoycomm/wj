@@ -34,6 +34,20 @@ jobs:
           zip wj-windows-amd64.zip wj.exe Run-Setup.cmd README.md HUONG-DAN.md
           # v1.5 and older self-update by these file names. Keep publishing them.
           for file in wj.exe wj-*; do cp "$file" "setup-gateway${file#wj}"; done
+          # The lite kit as plain files, for people who don't install wj. Made by
+          # wj init -lite itself, so it never differs from what wj installs.
+          # Built outside the checkout: wj init works from the Git root it finds.
+          dist="$PWD"
+          for job in general unity web go python; do
+            out="$RUNNER_TEMP/kit/$job"
+            mkdir -p "$out"
+            type_flag=()
+            [ "$job" = general ] || type_flag=(-type "$job")
+            ./wj-linux-amd64 init -lite "${type_flag[@]}" "$out" < /dev/null > /dev/null
+            # Holds an absolute path of this build machine.
+            rm -f "$out/.claude/settings.local.json"
+            (cd "$out" && zip -qr "$dist/wj-kit-lite-$job.zip" .)
+          done
           sha256sum wj* setup-gateway* > checksums.txt
       - uses: actions/upload-artifact@v4
         with:
