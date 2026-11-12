@@ -54,8 +54,13 @@ const (
 	swpNoMove       = 0x0002
 	tpmReturnCmd    = 0x0100
 	menuClose       = 1
+	menuSince       = 10 // + index in overlayWindows
+	menuOpacity     = 20 // + index in overlayOpacities
+	menuText        = 30 // + index in overlayTextSizes
+	mfChecked       = 0x0008
+	mfPopup         = 0x0010
 	logPixelsY      = 90
-	bgAlpha         = 235 // background only (0-255); text is always fully opaque
+	bgAlpha         = 235 // default background alpha (0-255); text is always fully opaque
 	borderAlpha     = 255
 	textColor       = 0xFFFFFF
 	mutedColor      = 0xD8D2CC
@@ -195,6 +200,7 @@ type overlayFrame struct {
 	expanded                    bool
 	warnLevel                   int
 	used, limit                 int64 // the window's total and the -warn limit; limit 0 means no bar
+	alpha                       byte
 }
 
 type overlayView struct {
@@ -215,6 +221,31 @@ type overlayView struct {
 	scale      float64
 	statePath  string
 	moving     bool // inside a drag: don't pull the window back into the work area yet
+	window     time.Duration
+	alpha      byte // background alpha; text stays opaque
+	textPct    int  // text size in percent of the default
+	refresh    chan struct{}
+}
+
+// overlaySettings is overlay.json. Old files hold only X and Y: zero values mean the default.
+type overlaySettings struct {
+	X, Y    int32
+	Since   string `json:",omitempty"`
+	Opacity int    `json:",omitempty"` // percent, 20-100
+	Text    int    `json:",omitempty"` // percent, 80-160
+}
+
+var overlayWindows = []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour}
+var overlayWindowNames = []string{"1 giờ", "24 giờ", "7 ngày"}
+var overlayOpacities = []int{40, 60, 80, 92, 100}
+var overlayTextSizes = []int{85, 100, 125, 150}
+
+func overlayLoadSettings() (s overlaySettings, ok bool) {
+	data, err := os.ReadFile(overlay.statePath)
+	if err != nil || json.Unmarshal(data, &s) != nil {
+		return overlaySettings{}, false
+	}
+	return s, true
 }
 
 var overlay overlayView
@@ -231,6 +262,8 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		}
 		return err
 	}
+	sinceSet := false
+	flags.Visit(func(f *flag.Flag) { sinceSet = sinceSet || f.Name == "since" })
 	if *warn != "" {
 		limit, err := parseTokenCount(*warn)
 		if err != nil {
@@ -257,13 +290,17 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		return nil
 	}
 	if *foreground {
-		return overlayLoop(*window, home)
+		return overlayLoop(*window, sinceSet, home)
 	}
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(exe, "overlay", "-run", "-since", window.String(), "-warn", *warn)
+	childArgs := []string{"overlay", "-run", "-warn", *warn}
+	if sinceSet {
+		childArgs = append(childArgs, "-since", window.String())
+	}
+	cmd := exec.Command(exe, childArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: detachedProcess | windows.CREATE_NEW_PROCESS_GROUP}
 	if err = cmd.Start(); err != nil {
 		return err
@@ -273,9 +310,23 @@ func runOverlay(args []string, out io.Writer, home string) error {
 	return nil
 }
 
-func overlayLoop(window time.Duration, home string) error {
+func overlayLoop(window time.Duration, sinceSet bool, home string) error {
 	runtime.LockOSThread()
 	overlay.statePath = filepath.Join(stateDir(home), "overlay.json")
+	overlay.alpha, overlay.textPct = bgAlpha, 100
+	if saved, ok := overlayLoadSettings(); ok {
+		if d, err := time.ParseDuration(saved.Since); err == nil && d > 0 && !sinceSet {
+			window = d
+		}
+		if saved.Opacity >= 20 && saved.Opacity <= 100 {
+			overlay.alpha = byte(saved.Opacity * 255 / 100)
+		}
+		if saved.Text >= 80 && saved.Text <= 160 {
+			overlay.textPct = saved.Text
+		}
+	}
+	overlay.window = window
+	overlay.refresh = make(chan struct{}, 1)
 	overlay.title = windowTag(window)
 	overlayDPIAware()
 	instance, _, _ := getModuleHandle.Call(0)
@@ -294,7 +345,7 @@ func overlayLoop(window time.Duration, home string) error {
 	overlay.hwnd = hwnd
 	overlaySetDPI(overlayWindowDPI(hwnd))
 
-	go overlayFeed(window, home, hwnd)
+	go overlayFeed(home, hwnd)
 
 	var msg winMsg
 	for {
@@ -343,9 +394,10 @@ func overlaySetDPI(dpi uintptr) {
 		}
 	}
 	overlay.scale = float64(dpi) / 96
-	overlay.font = overlayFont(10, 400, dpi)
-	overlay.bold = overlayFont(10, 600, dpi)
-	overlay.big = overlayFont(13, 700, dpi)
+	pct := overlay.textPct
+	overlay.font = overlayFont(10*pct/100, 400, dpi)
+	overlay.bold = overlayFont(10*pct/100, 600, dpi)
+	overlay.big = overlayFont(13*pct/100, 700, dpi)
 }
 
 func overlayFont(points, weight int, dpi uintptr) uintptr {
@@ -358,9 +410,12 @@ func overlayFont(points, weight int, dpi uintptr) uintptr {
 
 func int32ToPtr(v int) uintptr { return uintptr(int64(v)) }
 
-func overlayFeed(window time.Duration, home string, hwnd uintptr) {
+func overlayFeed(home string, hwnd uintptr) {
 	scanner := newSessionScanner(home)
 	for {
+		overlay.mu.Lock()
+		window := overlay.window
+		overlay.mu.Unlock()
 		since := time.Now().Add(-window)
 		scanner.scan(time.Time{})
 		list, total := scanner.projectStatus(since)
@@ -385,12 +440,16 @@ func overlayFeed(window time.Duration, home string, hwnd uintptr) {
 			shown += "/" + compactTokens(overlay.warn)
 		}
 		overlay.mu.Lock()
+		overlay.title = windowTag(window)
 		overlay.lines, overlay.detail, overlay.total, overlay.footer, overlay.whole = lines, detail, shown, footer, whole
 		overlay.warnLevel = warnLevel(total.Total, overlay.warn)
 		overlay.used = total.Total
 		overlay.mu.Unlock()
 		postMessage.Call(hwnd, wmSnapshot, 0, 0)
-		time.Sleep(overlayRefresh)
+		select {
+		case <-time.After(overlayRefresh):
+		case <-overlay.refresh:
+		}
 	}
 }
 
@@ -475,6 +534,29 @@ func overlayMenu(hwnd uintptr) {
 	}
 	toggle, _ := windows.UTF16PtrFromString(toggleText)
 	appendMenu.Call(menu, 0, menuToggle, uintptr(unsafe.Pointer(toggle)))
+	overlay.mu.Lock()
+	window, alpha, pct := overlay.window, overlay.alpha, overlay.textPct
+	overlay.mu.Unlock()
+	submenu := func(title string, count int, id func(int) uintptr, text func(int) string, checked func(int) bool) {
+		sub, _, _ := createPopupMenu.Call()
+		for i := 0; i < count; i++ {
+			flags := uintptr(0)
+			if checked(i) {
+				flags = mfChecked
+			}
+			item, _ := windows.UTF16PtrFromString(text(i))
+			appendMenu.Call(sub, flags, id(i), uintptr(unsafe.Pointer(item)))
+		}
+		name, _ := windows.UTF16PtrFromString(title)
+		appendMenu.Call(menu, mfPopup, sub, uintptr(unsafe.Pointer(name))) // destroyed with menu
+	}
+	submenu("Khoảng thời gian", len(overlayWindows), func(i int) uintptr { return uintptr(menuSince + i) },
+		func(i int) string { return overlayWindowNames[i] }, func(i int) bool { return overlayWindows[i] == window })
+	submenu("Độ trong suốt", len(overlayOpacities), func(i int) uintptr { return uintptr(menuOpacity + i) },
+		func(i int) string { return fmt.Sprintf("%d%%", overlayOpacities[i]) },
+		func(i int) bool { return byte(overlayOpacities[i]*255/100) == alpha })
+	submenu("Cỡ chữ", len(overlayTextSizes), func(i int) uintptr { return uintptr(menuText + i) },
+		func(i int) string { return fmt.Sprintf("%d%%", overlayTextSizes[i]) }, func(i int) bool { return overlayTextSizes[i] == pct })
 	label, _ := windows.UTF16PtrFromString("Đóng overlay")
 	appendMenu.Call(menu, 0, menuClose, uintptr(unsafe.Pointer(label)))
 	setForegroundWindow.Call(hwnd)
@@ -487,7 +569,35 @@ func overlayMenu(hwnd uintptr) {
 		destroyWindow.Call(hwnd)
 	case menuToggle:
 		overlayToggle(hwnd)
+	default:
+		overlayChoose(hwnd, int(choice))
 	}
+}
+
+// overlayChoose applies a time window, opacity or text size picked in the menu, and saves it.
+func overlayChoose(hwnd uintptr, choice int) {
+	switch {
+	case choice >= menuSince && choice < menuSince+len(overlayWindows):
+		overlay.mu.Lock()
+		overlay.window = overlayWindows[choice-menuSince]
+		overlay.title = windowTag(overlay.window)
+		overlay.mu.Unlock()
+		select {
+		case overlay.refresh <- struct{}{}:
+		default:
+		}
+	case choice >= menuOpacity && choice < menuOpacity+len(overlayOpacities):
+		overlay.mu.Lock()
+		overlay.alpha = byte(overlayOpacities[choice-menuOpacity] * 255 / 100)
+		overlay.mu.Unlock()
+	case choice >= menuText && choice < menuText+len(overlayTextSizes):
+		overlay.textPct = overlayTextSizes[choice-menuText]
+		overlaySetDPI(uintptr(overlay.scale*96 + 0.5))
+	default:
+		return
+	}
+	overlayRender(hwnd)
+	overlaySavePosition(hwnd)
 }
 
 func textWidth(hdc uintptr, text string) (int32, int32) {
@@ -578,7 +688,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 func overlaySnapshot() overlayFrame {
 	overlay.mu.Lock()
 	defer overlay.mu.Unlock()
-	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn}
+	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn, overlay.alpha}
 	if f.expanded {
 		f.lines = overlay.detail
 	}
@@ -622,7 +732,7 @@ func overlayRender(hwnd uintptr) {
 	selectObject.Call(hdc, colourBitmap)
 	overlayDraw(hdc, l, f, false)
 	gdiFlush.Call()
-	composeOverlay(colour, mask, int(l.width), int(l.height), int(overlay.px(6)), bgPixel, bgAlpha)
+	composeOverlay(colour, mask, int(l.width), int(l.height), int(overlay.px(6)), bgPixel, f.alpha)
 	composeBorder(colour, int(l.width), int(l.height), int(overlay.px(6)), borderPixel, borderAlpha, int(l.pad), int(l.pad+l.headerBase+overlay.px(3)), int(overlay.px(1)))
 	width, height, pad, thin := int(l.width), int(l.height), int(l.pad), int(overlay.px(1))
 	if f.limit > 0 {
@@ -692,7 +802,7 @@ func overlayFit(rect, work winRect, width, height int32) winPoint {
 // overlayStartPosition restores the last spot if that monitor is still there.
 func overlayStartPosition(width int32) (int32, int32) {
 	if data, err := os.ReadFile(overlay.statePath); err == nil {
-		var saved struct{ X, Y int32 }
+		var saved overlaySettings
 		if json.Unmarshal(data, &saved) == nil {
 			probe := winRect{saved.X, saved.Y, saved.X + 40, saved.Y + 40}
 			if monitor, _, _ := monitorFromRect.Call(uintptr(unsafe.Pointer(&probe)), 0); monitor != 0 {
@@ -714,7 +824,10 @@ func overlayStartPosition(width int32) (int32, int32) {
 func overlaySavePosition(hwnd uintptr) {
 	var rect winRect
 	getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-	data, err := json.Marshal(struct{ X, Y int32 }{rect.Left, rect.Top})
+	overlay.mu.Lock()
+	saved := overlaySettings{X: rect.Left, Y: rect.Top, Since: overlay.window.String(), Opacity: (int(overlay.alpha)*100 + 127) / 255, Text: overlay.textPct}
+	overlay.mu.Unlock()
+	data, err := json.Marshal(saved)
 	if err != nil {
 		return
 	}
