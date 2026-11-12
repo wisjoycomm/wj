@@ -408,3 +408,37 @@ func TestInitUsesGitRootFromSubfolder(t *testing.T) {
 		t.Error("AGENTS.md should not be in the subfolder")
 	}
 }
+
+func TestAddToWjBlock(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", "# wj init\na\n"},
+		{"x", "x\n\n# wj init\na\n"},
+		{"x\n\n# wj init\n.tmp/\n\n# mine\ny\n", "x\n\n# wj init\n.tmp/\na\n\n# mine\ny\n"},
+		{"x\r\n\r\n# wj init\r\n.tmp/\r\n", "x\r\n\r\n# wj init\r\n.tmp/\r\na\r\n"},
+	}
+	for _, c := range cases {
+		if got := addToWjBlock(c.in, []string{"a"}); got != c.want {
+			t.Errorf("addToWjBlock(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestInitWritesKitVersion(t *testing.T) {
+	old := buildVersion
+	buildVersion = "0.2.3\n"
+	t.Cleanup(func() { buildVersion = old })
+	root := t.TempDir()
+	runInitIn(t, root, "-type", "go")
+	path := filepath.Join(root, ".claude", "wj-kit")
+	if got := readText(t, path); got != "0.2.3\n" {
+		t.Fatalf("wj-kit = %q", got)
+	}
+	buildVersion = "0.2.4"
+	if out := runInitIn(t, root, "-type", "go"); !strings.Contains(out, "wj init -update") || readText(t, path) != "0.2.3\n" {
+		t.Errorf("version changed without -update:\n%s", out)
+	}
+	runInitIn(t, root, "-type", "go", "-update")
+	if got := readText(t, path); got != "0.2.4\n" {
+		t.Errorf("wj-kit after -update = %q", got)
+	}
+}

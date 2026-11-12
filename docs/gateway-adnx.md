@@ -1,13 +1,16 @@
-# Gateway ai.adnx.vn: lỗi `tool_reference` (điều tra 2026-11-09)
+# Gateway ai.adnx.vn: lỗi `tool_reference` (điều tra 2026-11-09, đã sửa 2026-11-11)
+
+Các phần "Lỗi chính" và "Bằng chứng" bên dưới mô tả lỗi **trước khi sửa** (2026-11-09). Kết quả kiểm tra lại ngày 2026-11-11 nằm ở mục "Kết quả kiểm tra lại".
 
 Tóm tắt phần [Gateway làm hỏng tool search](model.md#gateway-làm-hỏng-tool-search-cache-read-tăng-vọt)
 trong model.md, ở đây là bản đầy đủ: bằng chứng, các lỗi phụ, và cách kiểm tra lại.
 
 ## Tình trạng
 
-- **2026-11-09: CHƯA SỬA.** `tool_reference` dùng tên gốc vẫn bị `400 Tool reference 'X' not found in available tools`.
-- **Cách vá của proxy wj vẫn chạy:** thêm `_ide` vào tên trong `tool_reference`.
-- **Đã gửi bên gateway:** báo cáo, log và script trong `~/Downloads/gateway-tool-reference-report-2026-11-09.zip`.
+- **2026-11-11: ĐÃ SỬA lỗi chính.** `tool_reference` dùng tên gốc giờ trả 200 và model gọi đúng tên đó. Đã thử 43/43 tên hợp lệ (tool Claude Code, tool MCP dài, tên đã có `_ide`, tên tự đặt), có `stream: true`.
+- **Còn lại:** request không có trường `stream` vẫn lộ tên `X_ide`; gateway vẫn chèn 20 tool cố định (xem "Lỗi phụ").
+- **Bản vá của proxy wj không còn cần,** nhưng vô hại: chỉ chạy sau khi gateway trả `400 Tool reference ... not found`, nên gateway đã sửa thì không bao giờ kích hoạt. Gateway nhận cả tên gốc lẫn tên có `_ide`.
+- **Lịch sử (2026-11-09):** từng bị `400 Tool reference 'X' not found in available tools`. Báo cáo, log và script gửi bên gateway: `~/Downloads/gateway-tool-reference-report-2026-11-09.zip`.
 
 ## Lỗi chính
 
@@ -81,6 +84,24 @@ Thêm:
 - **Số lần vá:** từ đó đến 2026-11-09, proxy đã thêm `_ide` cho **467 request**.
 - **Phiên đầu tiên có dấu hiệu fallback:** 2026-11-05 (endlesswinter).
 
+## Kết quả kiểm tra lại (2026-11-11)
+
+Gọi thẳng gateway, model `cc/claude-haiku-4-5-20251001`.
+
+| Test | Trước (11-09) | Sau (11-11) |
+|---|---|---|
+| T2 ref = `Monitor` | 400 | **200**, model gọi `Monitor` |
+| T3 ref = `Monitor_ide` | 200 | 200, model gọi `Monitor` |
+| T4 ref = tên MCP gốc | 400 | **200** |
+| T5 `stream: true` | 400 | **200** |
+| T6 ref = `Nope` | 400 | 400 (đúng) |
+| T7 không có `stream` | 200, lộ `Monitor_ide` | 200, **vẫn lộ `Monitor_ide`** |
+| T8 liệt kê tool | `get_weather_ide` + 20 tool chèn | **không đổi** |
+
+Thử thêm 45 tên, mỗi tên một request có `tool_reference` tên gốc và `defer_loading`: 43 tên đạt (gồm `Agent`, `Artifact`, `Workflow`, `Task*`, `Cron*`, `mcp__claude_ai_Figma__use_figma`, `mcp__claude_ai_Context7__query-docs`, `mcp__claude-in-chrome__computer`, `Foo_ide`, `my_tool`). Hai ca còn lại không phải lỗi gateway: `ToolSearch` bị 400 do script khai báo trùng tên, `mcp__claude-in-chrome__navigate` được 200 nhưng model chọn gọi `ToolSearch`.
+
+Chưa kiểm tra bằng một phiên Claude Code thật qua gateway: kiểm tra xem dòng `[Tool references removed - tool search not enabled]` còn xuất hiện trong file phiên không.
+
 ## Kiểm tra lại
 
 Script trong [gateway-adnx/](gateway-adnx/). Script đọc key từ `GATEWAY_KEY`, hoặc từ `~/.wj/profiles/adnx.json` nếu không có, và không in key ra. Mỗi lần chạy tốn vài nghìn token Haiku.
@@ -94,7 +115,7 @@ bash docs/gateway-adnx/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng t
 ```
 
 Đọc kết quả:
-- **Gateway đã sửa:** T2, T4, T5 trả 200 và model gọi đúng tên gốc. Khi đó có thể bỏ bản vá `tool_ref_suffix` trong `proxy_addon.py`.
+- **Gateway đã sửa (tình trạng từ 2026-11-11):** T2, T4, T5 trả 200 và model gọi đúng tên gốc. Bản vá `tool_ref_suffix` trong `proxy_addon.py` không còn cần, và vô hại nên chưa gỡ.
 - **Bản vá proxy hỏng:** T3 trả 400, nghĩa là gateway đổi quy tắc đặt tên. Sửa `tool_ref_suffix` trong `proxy_addon.py`.
 
 Phải gọi **thẳng** gateway. Proxy wj sửa request nên sẽ che mất lỗi; các script đã tự bỏ `HTTPS_PROXY`.

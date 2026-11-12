@@ -12,7 +12,7 @@ Hoặc xem từng phần:
 | [Model](model.md) | Lấy model từ gateway, dùng chéo model giữa các app |
 | [Token](token.md) | Xem token theo project và cả máy, bật overlay |
 | [Giảm context](context.md) | Token tăng vọt: tìm nguyên nhân, giảm context mà không mất thông tin |
-| [Gateway ai.adnx.vn](gateway-adnx.md) | Lỗi `tool_reference` của gateway: bằng chứng, lỗi phụ, script kiểm tra lại |
+| [Gateway ai.adnx.vn](gateway-adnx.md) | Lỗi `tool_reference` của gateway (đã sửa 2026-11-11): bằng chứng, lỗi phụ còn lại, script kiểm tra lại |
 | [Project](project.md) | Setup rule và skill cho một project, so cấu hình giữa các agent |
 
 Trong terminal: `wj help`, hoặc `wj help claude`, `codex`, `models`, `usage`, `proxy`,

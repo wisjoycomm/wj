@@ -19,6 +19,13 @@ Input for this turn: $ARGUMENTS
 
 A worker's result arrives by itself when it finishes: do step 3 for it then.
 
+## 0. Is `wj` there?
+`wj` is an optional helper: this skill works without it, a bit slower and with more tokens.
+Run `wj version` once per session and read the one-line file `.claude/wj-kit` (the wj version this kit was installed from; if the file is missing, there is no minimum).
+- `wj` not found: manual mode. Wherever a step shows a `wj` command, use its "Without wj" line instead. Tell me once: "wj not installed, manual mode".
+- `wj` older than the number in `.claude/wj-kit`: manual mode too, and tell me once to run `wj update`.
+- Otherwise use the `wj` commands.
+
 ## PLAN.md format (strict)
 PLAN.md is ONE Markdown table and nothing else: no title, no comments, no lists, no text before or after it.
 `wj` reads it line by line, so any other text breaks it.
@@ -56,12 +63,18 @@ wj plan
 It prints the next ID, the active tasks with their line numbers, READY (highest priority first), WAITING and
 FORMAT problems. Fix every FORMAT line before anything else.
 
+Without wj: Grep PLAN.md for `^\| T-` with `-n`. READY = Status `TODO` whose Depends are all `DONE` or archived,
+highest Pri first. Next ID = highest ID seen in PLAN.md, or in the last line of PLAN-ARCHIVE.md (Grep `^\| T-`
+with `head_limit` 1 and `-n`, then the tail via Read offset), plus one. Check that each row has 11 cells.
+
 For finished tasks, query PLAN-ARCHIVE.md instead of reading it:
 
 ```
 wj plan log               # last 20 archived tasks
 wj plan log -find T-12    # one ID, or text in Task or Notes
 ```
+
+Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
 
 ## Editing PLAN.md
 - Change a task with one Edit whose old_string is that task's whole line (Read it with offset = its line number, limit 1).
@@ -86,7 +99,7 @@ wj plan log -find T-12    # one ID, or text in Task or Notes
 - Find the right files with Grep/Glob before writing Scope. Don't read whole files.
 
 ## 2. Launch
-- Run `wj plan`. Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
+- Run `wj plan` (without wj: see "Reading PLAN.md"). Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
 - For each one, set Status `DOING`.
 - Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
   last commit, so a worker only sees what is committed.
@@ -134,6 +147,10 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
   It appends each row to PLAN-ARCHIVE.md (a table: the PLAN.md columns plus `Commit` and `Archived` date) and
   deletes the row from PLAN.md. If I gave commit hashes, pass them; a `-` in Commit means none was found.
   Never read PLAN-ARCHIVE.md.
+
+  Without wj: for each task, find its commit with `git log --format=%h -1 --grep "<ID>"`, append the row to the
+  end of PLAN-ARCHIVE.md (Bash `>>`) as the PLAN.md cells plus the commit (`-` if none) and today's date
+  (`YYYY-MM-DD`), then delete the row from PLAN.md.
 - Commit PLAN.md and PLAN-ARCHIVE.md, then do step 2.
 
 ## Rules

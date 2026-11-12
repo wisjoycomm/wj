@@ -29,13 +29,22 @@ Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or
 - Never edit PLAN.md. Scratch files go in `.tmp/`.
 
 ## 4. Verify
-From your worktree's root run (for Unity projects set the Bash timeout to 600000):
+`wj` is optional. Run `wj version` once. If it works and `.claude/wj-kit` (one line, a version) is not newer than
+it, from your worktree's root run (for Unity projects set the Bash timeout to 600000):
 
 ```
 wj verify <ID>
 ```
 
-Act on the **last line** of the output:
+Without wj (not found, or older than `.claude/wj-kit`) do by hand what it does:
+1. `git status --short`: every changed file must be inside Scope (see step 3), and PLAN.md must be untouched.
+2. Run the task's Verify command from your row. If Verify is `-`: `npm test --silent` (package.json with a test
+   script), else `pytest -q --tb=short --maxfail=1`, else `go test ./...`. Unity: no auto-detect, report
+   BLOCKED `Verify needed` instead of guessing.
+3. Judge by the exit code, keep only the last ~40 lines of output, and count a failure as one strike.
+Treat the result like `wj verify`'s last line: exit 0 is PASS, non-zero is FAIL, a missing tool or dependency is NOT_VERIFIED.
+
+With wj, act on the **last line** of the output:
 
 | Last line | Meaning | What to do |
 |---|---|---|
@@ -47,7 +56,6 @@ Also:
 - A `WARN out-of-scope:` line means you touched a file outside Scope: revert that change unless step 3's exception applies.
 - A `WARN shared file:` line means you changed a shared file in a task with no Scope: revert it unless the task is about that file.
 - If the command times out, rerun it once (a fresh Unity worktree imports slowly). A second timeout means BLOCKED `verify timeout`.
-- If `wj` is not found, report BLOCKED with `wj not installed`.
 
 ## 5. Commit on your branch
 Only after `VERIFY: PASS` (or for a PARTIAL result whose finished part passed):
