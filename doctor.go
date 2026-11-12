@@ -42,6 +42,11 @@ const doctorHelp = `wj doctor - tự kiểm tra máy, báo vấn đề, sửa đ
   - File tạm cũ hơn 7 ngày trong .tmp/ và .temp/ của project: sửa bằng chuyển các
     file đó vào thùng rác, không xoá vĩnh viễn (file mới hơn giữ nguyên).
 
+  - Bản wj cũ (.old-*) do các lần update để lại: sửa bằng chuyển vào thùng rác
+    (giữ bản mới nhất).
+  - Project có kit nhưng memory Claude chưa nằm trong project: sửa bằng thêm
+    autoMemoryDirectory vào settings.local.json.
+
   Không có AI (không gateway, mất mạng) thì chỉ dùng các luật sửa cứng ở trên.`
 
 // doctorFinding is one problem. fix is nil when it needs a human; the text then
@@ -144,6 +149,8 @@ func doctorCheck(env doctorEnv) []doctorFinding {
 	findings = append(findings, checkKit(env)...)
 	findings = append(findings, checkFixedContext(env)...)
 	findings = append(findings, checkScratch(env)...)
+	findings = append(findings, checkOldExecutables(env)...)
+	findings = append(findings, checkLocalMemory(env)...)
 	return findings
 }
 
