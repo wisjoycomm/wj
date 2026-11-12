@@ -219,7 +219,9 @@ Hiện tối đa 20 project:
 Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi dòng tính trong khoảng
 đang xem (mặc định 24 giờ). Dòng đầu là tổng cả máy, ví dụ `24h 7.7M · 7d 173.6M · 30d 812.1M`.
 
-Nền overlay trong suốt để thấy phần bên dưới, chữ vẫn rõ nét.
+Nền overlay gần đục (mặc định 92%) để chữ đọc rõ trên mọi nền, có viền mỏng. Chữ luôn đặc hoàn toàn.
+Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề; các model thụt vào dưới project.
+Muốn thấy phần bên dưới thì chỉnh độ trong suốt (xem "Menu chuột phải").
 
 Bấm đúp vào overlay (hoặc chuột phải, chọn Mở rộng) để xem báo cáo: app, lần dùng gần nhất,
 model, token vào, ra, cache và số tiền quy đổi của từng project, thêm cả project đã đóng trong
@@ -233,14 +235,28 @@ Bấm đúp lần nữa để thu gọn. Mỗi lần mở overlay đều bắt �
 wj overlay -warn 5M
 ```
 
-Dòng tổng hiện `16.5M/5M`, chuyển vàng từ 80% ngưỡng và đỏ khi vượt. Ngưỡng do mình tự đặt, tính
-trên tổng cả máy trong khoảng đang xem (`-since`). Mặc định không cảnh báo.
+Dòng tổng hiện `16.5M/5M`, chuyển vàng từ 80% ngưỡng và đỏ khi vượt. Dưới dòng tổng có thanh
+đo: xanh lá khi dưới 80%, vàng từ 80%, đỏ khi vượt ngưỡng. Thanh này chỉ hiện khi có `-warn`.
+Ngưỡng do mình tự đặt, tính trên tổng cả máy trong khoảng đang xem (`-since`, hoặc đổi trong menu
+chuột phải). Mặc định không cảnh báo.
 
 Đây không phải limit thật của nhà cung cấp. Số token không cho biết còn lại bao nhiêu: gói Claude
 xem bằng `/usage`, còn gateway xem trên trang của gateway.
 
-Kéo để đổi chỗ, chuột phải để đóng. Vị trí được lưu cho lần mở sau. Hiện chỉ có trên
-Windows; macOS và Linux dùng `wj top` trong một cửa sổ terminal nhỏ.
+## Menu chuột phải
+
+Chuột phải vào overlay mở menu:
+
+- **Mở rộng / Thu gọn (bấm đúp)**: như bấm đúp.
+- **Khoảng thời gian**: 1 giờ, 24 giờ, 7 ngày. Đổi khoảng đang xem, không cần mở lại.
+- **Độ trong suốt**: đặt độ đục của nền 40%, 60%, 80%, 92%, 100% (mặc định 92%; 100% là nền đặc, không thấy phần bên dưới).
+- **Cỡ chữ**: 85%, 100%, 125%, 150% (mặc định 100%).
+- **Đóng overlay**.
+
+Kéo để đổi chỗ. Vị trí, khoảng thời gian, độ trong suốt và cỡ chữ được lưu trong `overlay.json`
+cho lần mở sau. Overlay tự đổi cỡ theo DPI của màn hình đang đứng và luôn nằm trong vùng làm việc
+của màn hình (không bị kéo ra khỏi màn hình). Hiện chỉ có trên Windows; macOS và Linux dùng
+`wj top` trong một cửa sổ terminal nhỏ.
 
 ## Đọc số thế nào
 
