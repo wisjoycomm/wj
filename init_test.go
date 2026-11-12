@@ -77,6 +77,29 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 	}
 }
 
+func TestInitUnityInstallsSharedCheckoutWorker(t *testing.T) {
+	unity := t.TempDir()
+	runInitIn(t, unity, "-type", "unity,web")
+	workerPath := filepath.Join(unity, ".claude", "agents", "orca-worker.md")
+	worker := readText(t, workerPath)
+	if strings.Contains(worker, "isolation:") || strings.Contains(worker, "\ntools:") || !strings.Contains(worker, "Unity MCP") {
+		t.Errorf("unity worker should be the shared-checkout one:\n%s", worker)
+	}
+	if out := runInitIn(t, unity, "-type", "unity", "-dry-run"); strings.Contains(out, "khác bản kit") {
+		t.Errorf("rerun should see the worker as up to date:\n%s", out)
+	}
+	runInitIn(t, unity, "-remove")
+	if _, err := os.Stat(workerPath); err == nil {
+		t.Error("-remove should take out the unity worker")
+	}
+
+	other := t.TempDir()
+	runInitIn(t, other, "-type", "go")
+	if !strings.Contains(readText(t, filepath.Join(other, ".claude", "agents", "orca-worker.md")), "isolation: worktree") {
+		t.Error("non-unity project should keep the worktree worker")
+	}
+}
+
 func TestInitKitIsGeneralWithoutChosenStack(t *testing.T) {
 	root := t.TempDir()
 	runInitIn(t, root)
