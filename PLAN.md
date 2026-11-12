@@ -1,9 +1,6 @@
 | ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |
 |---|---|---|---|---|---|---|---|---|---|---|
-| T-01 | Machine-level defaults in `wj onboard`: global instructions and MCP servers for each agent | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-02 | `wj init -update` to refresh Orca skills in projects made with an older kit | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-03 | Make the Orca skill scripts work without `pwsh` on macOS and Linux | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-04 | Generate the `.claude` and `.agents` Orca skill copies from one source | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-05 | Confirm where Antigravity reads user-level skills and MCP servers on each OS | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-06 | Confirm Codex works end to end through the gateway, including `codex resume` | P3 | ? | TODO | claude | - | - | - | - | - |
-| T-07 | Token overlay for macOS and Linux | P3 | ? | TODO | claude | - | - | - | - | - |
+| T-11 | wj init -type unity: install the shared-checkout orca-worker (no worktree; scenes, prefabs, uGUI via Unity MCP) | P1 | 5 | DOING | claude:sonnet | - | `init.go`, `init_test.go`, `init_remove.go`, `kit/stacks/unity/dot-claude/agents/orca-worker.md` | `go vet ./... && go test ./...` | Spec: docs/project.md "Unity: chung checkout". Other stacks keep the worktree worker | - |
+| T-12 | wj verify outside a worktree: check only the task's Scope, never start Unity batchmode while the Editor is open | P1 | 3 | DOING | claude:sonnet | - | `verify.go`, `verify_test.go` | `go vet ./... && go test ./...` | Spec: docs/project.md "Unity: chung checkout". Editor open = Temp/UnityLockfile exists | - |
+| T-13 | Orchestrator skill, Unity mode: script tasks in parallel, Editor tasks one at a time, record commit, no merge | P1 | 3 | DOING | claude:sonnet | - | `kit/orca/dot-claude/skills/orca-orchestrator/SKILL.md`, `.claude/skills/orca-orchestrator/SKILL.md` | `go vet ./... && go test ./...` | Spec: docs/project.md "Unity: chung checkout". Keep both copies identical; add one short section | - |
+| T-14 | Unity rules: change uGUI, scenes and prefabs through the Unity MCP server, not by editing YAML | P2 | 1 | DOING | claude:haiku | - | `kit/stacks/unity/rules.md` | `go vet ./... && go test ./...` | Replace the hand-edit rule; no MCP connected = say so and list the Editor steps | - |
