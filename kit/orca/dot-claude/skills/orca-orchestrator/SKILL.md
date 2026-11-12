@@ -168,6 +168,14 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
   (`YYYY-MM-DD`), then delete the row from PLAN.md.
 - Commit PLAN.md and PLAN-ARCHIVE.md, then do step 2.
 
+## Unity mode (shared checkout)
+Applies when `.claude/agents/orca-worker.md` has no `isolation: worktree` line. Workers share this checkout, so there are no branches or worktrees.
+- Script tasks (only `.cs`, `.asmdef`...) run in parallel as usual.
+- Editor tasks (Scope has `*.unity`, `*.prefab`, `*.asset`, or the task runs tests / edits UI) run one at a time, and only when no script task is `DOING`.
+- Record: Session is the task's commit hash (`git log --format=%h -1 --grep "<ID>:"`); review with `git --no-pager show <hash>`.
+- An Editor task that reports a compile error in a file: add a `P0` task with that file as Scope, then rerun the blocked task after it is DONE.
+- No merge step: `merge` only archives (`wj plan archive T-01=<hash>`).
+
 ## Rules
 - Only you edit PLAN.md. Don't edit source files. Don't push.
 - Keep replies short: the changed rows plus what happens next, nothing else.
