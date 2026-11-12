@@ -26,6 +26,8 @@ Luật trong AGENTS.md chỉ là lời nhắc; lệnh này chặn hẳn và nói
           trong .claude/settings.json (node_modules, lockfile, .env, Library...)
 
 Đổi ngưỡng: đặt WJ_GUARD_MAX_LINES trong khối env của settings (0 = bỏ kiểm tra số dòng).
+Tắt hẳn cho một project: đặt "WJ_GUARD": "off" trong khối env đó. Hook cho qua mọi thứ, và
+wj init / wj doctor không thêm hook lại nếu bạn đã xoá nó.
 Lệnh không bao giờ làm hỏng phiên: gặp gì không hiểu thì cho qua.`
 
 const (
@@ -43,7 +45,17 @@ type guard struct {
 	root     string // project (or worktree) root
 	cwd      string
 	rules    []guardRule
-	maxLines int // 0 = no size check
+	maxLines int  // 0 = no size check
+	off      bool // WJ_GUARD=off: the project chose to run without the guard
+}
+
+// guardOffKey turns the guard off for a project, in the env block of its
+// settings: the hook then allows everything, and wj init and wj doctor stop
+// adding the hook back.
+const guardOffKey = "WJ_GUARD"
+
+func guardIsOff(value string) bool {
+	return contains([]string{"off", "0", "false", "no"}, strings.ToLower(strings.TrimSpace(value)))
 }
 
 // Commands that print file content. The dumpers print a whole file.
@@ -83,6 +95,9 @@ func runGuard(args []string, input io.Reader, out io.Writer) error {
 		}
 	}
 	g := newGuard(call.Cwd)
+	if g.off {
+		return nil
+	}
 	reason := ""
 	switch call.Tool {
 	case "Read":
@@ -135,6 +150,9 @@ func newGuard(cwd string) *guard {
 		// The session's env block reaches the hook; reading it here also covers a
 		// hook started some other way.
 		env, _ := doc["env"].(map[string]any)
+		if text, ok := env[guardOffKey].(string); ok {
+			g.off = guardIsOff(text)
+		}
 		if text, ok := env["WJ_GUARD_MAX_LINES"].(string); ok {
 			if n, err := strconv.Atoi(text); err == nil && n >= 0 {
 				g.maxLines = n
@@ -143,6 +161,9 @@ func newGuard(cwd string) *guard {
 	}
 	if n, err := strconv.Atoi(os.Getenv("WJ_GUARD_MAX_LINES")); err == nil && n >= 0 {
 		g.maxLines = n
+	}
+	if value := os.Getenv(guardOffKey); value != "" {
+		g.off = guardIsOff(value)
 	}
 	return g
 }

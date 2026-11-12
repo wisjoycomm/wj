@@ -173,3 +173,29 @@ func TestShellPipelines(t *testing.T) {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
 }
+
+// WJ_GUARD=off: the hook allows everything, and init does not add the hook back.
+func TestGuardCanBeTurnedOffForAProject(t *testing.T) {
+	root := guardProject(t)
+	t.Setenv("WJ_GUARD", "")
+	big := map[string]any{"file_path": filepath.Join(root, "big.go")}
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.local.json"), `{"env":{"WJ_GUARD":"off"}}`)
+	if reason := guardReply(t, root, "Read", big); reason != "" {
+		t.Errorf("guard is off but denied: %s", reason)
+	}
+	if reason := guardReply(t, root, "Bash", map[string]any{"command": "cat apps/web/.env"}); reason != "" {
+		t.Errorf("guard is off but denied: %s", reason)
+	}
+
+	project := t.TempDir()
+	path := filepath.Join(project, ".claude", "settings.json")
+	writeTestFile(t, path, `{"env":{"WJ_GUARD":"off"}}`)
+	runInitIn(t, project, "-type", "go")
+	settings := readText(t, path)
+	if strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Read(**/go.sum)") {
+		t.Errorf("init must leave the hook out and still add the rest:\n%s", settings)
+	}
+	if f := checkKit(doctorEnv{home: t.TempDir(), cwd: project}); len(f) != 0 {
+		t.Errorf("doctor must not ask for the hook back: %s", f[0].Detail)
+	}
+}

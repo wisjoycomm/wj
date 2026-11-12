@@ -78,8 +78,52 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 	case "help", "-h", "--help", "-help", "/?":
 		return printHelp(args[1:], input, out)
 	default:
+		// A word that is not a command is a typo, not connection flags.
+		if !strings.HasPrefix(args[0], "-") {
+			return unknownCommand(args[0])
+		}
 		return runCLI(args, input, out)
 	}
+}
+
+// appCommands are the words runApp knows, for the "did you mean" of a typo.
+var appCommands = []string{"apps", "status", "configure", "update", "version", "auth", "tools", "proxy", "direct", "check",
+	"doctor", "plan", "verify", "digest", "trash", "guard", "init", "usage", "top", "overlay", "models", "onboard", "help"}
+
+func unknownCommand(word string) error {
+	best, bestDistance := "", 3
+	lower := strings.ToLower(word)
+	for _, name := range appCommands {
+		if d := editDistance(lower, name); d < bestDistance {
+			best, bestDistance = name, d
+		}
+	}
+	if best != "" {
+		return fmt.Errorf("không có lệnh %q. Ý bạn là: wj %s ? Xem mọi lệnh: wj help", word, best)
+	}
+	return fmt.Errorf("không có lệnh %q. Xem mọi lệnh: wj help", word)
+}
+
+// editDistance is the number of single-letter changes between two words.
+func editDistance(a, b string) int {
+	x, y := []rune(a), []rune(b)
+	row := make([]int, len(y)+1)
+	for j := range row {
+		row[j] = j
+	}
+	for i := 1; i <= len(x); i++ {
+		previous := row[0]
+		row[0] = i
+		for j := 1; j <= len(y); j++ {
+			cost := 1
+			if x[i-1] == y[j-1] {
+				cost = 0
+			}
+			current := min(row[j]+1, row[j-1]+1, previous+cost)
+			previous, row[j] = row[j], current
+		}
+	}
+	return row[len(y)]
 }
 
 // Do not buffer ahead across menu/child-process boundaries: the child owns stdin.
@@ -108,12 +152,13 @@ Wisjoy wj %s
    1. Ứng dụng & môi trường (máy mới, ứng dụng, công cụ dòng lệnh)
    2. Setup project (rule, skill Orca)
    3. AI Agent (kết nối, model, xem token, kiểm tra cấu hình)
-   4. Cập nhật wj
+   4. Kiểm tra máy và project, sửa vấn đề (wj doctor)
+   5. Cập nhật wj
 
    h. Hướng dẫn nhanh      0. Thoát
 `
 
-const menuPrompt = "Chọn [0-4, h]"
+const menuPrompt = "Chọn [0-5, h]"
 
 type menuItem struct {
 	label string
@@ -219,13 +264,15 @@ func mainMenu(input io.Reader, out io.Writer) error {
 		case "3":
 			err = agentMenu(input, out)
 		case "4":
+			err = runDoctor(nil, input, out)
+		case "5":
 			if yes(menuAnswer(input, out, "Tải bản wj mới nhất? [y/N, Enter = huỷ]")) {
 				err = updateSelf(nil, out)
 			}
 		case "h", "?", "help":
 			err = printHelp(nil, input, out)
 		default:
-			fmt.Fprintln(out, "Không có mục này. Gõ số từ 0 đến 4, hoặc h để xem hướng dẫn.")
+			fmt.Fprintln(out, "Không có mục này. Gõ số từ 0 đến 5, hoặc h để xem hướng dẫn.")
 		}
 		reportMenuResult(out, err)
 	}

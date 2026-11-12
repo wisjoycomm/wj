@@ -87,6 +87,8 @@ Không bị chặn: đọc một khoảng (`offset` + `limit`), `cat file | grep
   tự chặn tool Read theo các rule này; guard chặn thêm đường vòng qua shell.
 - Đổi ngưỡng: thêm `"WJ_GUARD_MAX_LINES": "800"` vào khối `env` của settings. `0` là bỏ kiểm tra số dòng (rule deny
   vẫn giữ).
+- Tắt hẳn cho một project: thêm `"WJ_GUARD": "off"` vào khối `env` đó. Hook cho qua mọi thứ, và bạn xoá được khối
+  `hooks` mà `wj init` hay `wj doctor` không thêm lại. Các phần khác của kit (file cấm đọc, giới hạn output) vẫn giữ.
 - Guard không bao giờ làm hỏng phiên: JSON lạ, file không đọc được, lệnh shell phức tạp (here-document, `cd` rồi mới
   đọc) đều được cho qua. Nó chặn trường hợp rõ ràng, không cố đoán.
 - Lệnh của hook là `command -v wj >/dev/null 2>&1 && wj guard || true`: máy chưa có `wj`, hoặc `wj` bản cũ chưa

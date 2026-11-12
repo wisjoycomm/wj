@@ -22,28 +22,37 @@ CHỦ ĐỀ HƯỚNG DẪN
   help tools     bộ công cụ dòng lệnh, quản lý cửa sổ
   help init      setup ban đầu cho một project (rule chung, rule theo job, skill Orca)
   help check     xem các agent có khớp cấu hình không
+  help doctor | plan | verify | digest | guard | trash    từng lệnh của project
   help words    giải thích các từ hay gặp (gateway, token, profile...)
 
-LỆNH HAY DÙNG
+CÀI MÁY VÀ KẾT NỐI
   wj apps list                   xem app nào đã cài
   wj apps install claude,codex   cài app còn thiếu
   wj configure claude            kết nối Claude Code
   wj configure codex             kết nối Codex
   wj -use-profile adnx -run      đổi sang kết nối "adnx" và mở Claude
+  wj models                      lấy lại danh sách model từ gateway
+  wj check                       so cấu hình giữa các agent (chỉ đọc)
+
+XEM TOKEN
   wj top                         token mọi project, cập nhật liên tục
   wj overlay                     token luôn nổi trên màn hình (Windows)
   wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng
-  wj models                      lấy lại danh sách model từ gateway
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
-  wj init                        setup ban đầu cho project đang đứng
-  wj check                       so cấu hình giữa các agent (chỉ đọc)
-  wj doctor                      tự kiểm tra máy, báo vấn đề, sửa (-dry-run chỉ báo, -ai nhờ AI gợi ý)
-  wj plan                        PLAN.md một bảng: task sẵn sàng, check format, convert kiểu cũ
+
+PROJECT: TIẾT KIỆM TOKEN
+  wj init                        cài kit cho project đang đứng (-lite: phần không cần wj)
+  wj doctor                      kiểm tra máy và project, báo vấn đề, sửa (-dry-run chỉ báo, -ai nhờ AI gợi ý)
+  wj digest                      lỗi lặp lại, chỗ lãng phí token, ghi chú memory của project (cho /orca-dream)
+  wj plan                        PLAN.md một bảng: task sẵn sàng, check format, worker cho model khác
+  wj trash <file>...             chuyển file vào thùng rác thay vì xoá hẳn
+
+AGENT TỰ GỌI (bạn ít khi gõ)
   wj verify T-01                 worker: kiểm tra một task trong worktree
-  wj digest                      lỗi lặp lại trong các phiên Claude Code của project (cho /orca-dream)
   wj guard                       hook của Claude Code: chặn lượt đọc tốn token (wj init tự gắn)
-  wj trash <file>...             chuyển file vào thùng rác thay vì xoá hẳn (agent dùng thay rm)
+
+TOOL NÀY
   wj update                      cập nhật chính tool này
   wj version                     xem phiên bản
 

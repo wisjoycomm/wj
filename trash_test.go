@@ -48,3 +48,36 @@ func TestTrashMovesOnlyWhenEveryPathExists(t *testing.T) {
 		t.Errorf("no arguments must print the help: %v %s", err, out.String())
 	}
 }
+
+func TestUnknownCommandSuggestsTheNearestOne(t *testing.T) {
+	var out bytes.Buffer
+	for word, want := range map[string]string{"doctr": "wj doctor", "usgae": "wj usage", "plna": "wj plan", "xyzzy123": "wj help"} {
+		err := runApp([]string{word}, strings.NewReader(""), &out)
+		if err == nil || !strings.Contains(err.Error(), "không có lệnh") || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", word, err)
+		}
+	}
+	if editDistance("doctor", "doctor") != 0 || editDistance("", "abc") != 3 || editDistance("kitten", "sitting") != 3 {
+		t.Error("editDistance is wrong")
+	}
+}
+
+func TestUpdateKeepsOnlyTheNewestBackup(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "wj.exe")
+	for _, name := range []string{"wj.exe", "wj.exe.old-20261105T121155.1", "wj.exe.old-20261110T162612.2", "wj.exe.old-20261110T213238", "other.exe.old-20261101T000000"} {
+		writeTestFile(t, filepath.Join(dir, name), name)
+	}
+	removeOldExecutables(dest)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	for _, entry := range entries {
+		left = append(left, entry.Name())
+	}
+	if got := strings.Join(left, " "); got != "other.exe.old-20261101T000000 wj.exe wj.exe.old-20261110T213238" {
+		t.Errorf("left: %s", got)
+	}
+}

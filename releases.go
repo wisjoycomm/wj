@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 )
@@ -271,7 +272,20 @@ func replaceExecutable(source, dest string) error {
 	if backup != "" {
 		_ = os.Remove(backup)
 	}
+	removeOldExecutables(dest)
 	return nil
+}
+
+// removeOldExecutables clears the backups earlier updates could not delete
+// because Windows had the program open. The newest stays, as a way back.
+func removeOldExecutables(dest string) {
+	backups, _ := filepath.Glob(dest + ".old-*")
+	sort.Strings(backups) // the name ends in a UTC time, so this is oldest first
+	for i, backup := range backups {
+		if i < len(backups)-1 {
+			_ = os.Remove(backup)
+		}
+	}
 }
 
 func updateSelf(args []string, out io.Writer) error {

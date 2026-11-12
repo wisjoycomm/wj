@@ -424,6 +424,12 @@ func planSettings(root string, stacks []string, lite bool) (initChange, error) {
 		if err = json.Unmarshal(data, &kit); err != nil {
 			return initChange{}, fmt.Errorf("%s: %w", source, err)
 		}
+		// The project turned the guard off: don't put its hook back.
+		if env, _ := doc["env"].(map[string]any); env != nil {
+			if value, _ := env[guardOffKey].(string); guardIsOff(value) {
+				delete(kit, "hooks")
+			}
+		}
 		added = mergeSettings(doc, kit) || added
 	}
 	if hasFile && !added {
