@@ -239,6 +239,9 @@ const helpInit = `SETUP BAN ĐẦU CHO MỘT PROJECT
   wj init -update             project cài bằng kit cũ: lấy skill mới, bỏ script .ps1 và skill worker cũ
   wj init -lite               chỉ phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook).
                               Người không cài wj lấy đúng phần này từ wj-kit-lite-<job>.zip trong release
+  wj init -remove             gỡ kit: khối wj trong AGENTS.md, file giống bản kit, hook wj guard, quyền Orca.
+                              File bạn đã sửa và phần bạn tự viết giữ nguyên; file gỡ vào thùng rác.
+                              Thêm -dry-run để chỉ xem danh sách
 
 Loại job: unity, web, go, python. Luôn có rule chung cho mọi agent.
 
