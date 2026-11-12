@@ -114,8 +114,24 @@ func runDigest(args []string, out io.Writer) error {
 		return report.printSession(out, *session)
 	}
 	report.print(out, filepath.Base(root), *days)
-	printMemory(out, root, time.Now())
+	printMemory(out, root, checkoutTop(dir), time.Now())
 	return nil
+}
+
+// checkoutTop is the top folder of the checkout (main repo or worktree) that
+// holds cwd; cwd itself when no .git is found above it.
+func checkoutTop(cwd string) string {
+	dir := filepath.Clean(cwd)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Clean(cwd)
+		}
+		dir = parent
+	}
 }
 
 // inProject reports whether a session that ran in cwd belongs to the repo whose

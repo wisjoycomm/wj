@@ -29,7 +29,7 @@ func TestDigestListsMemoryAndFlagsStaleNotes(t *testing.T) {
 		"# Rules\n\n## Lessons\n- Build with `tools/build.sh`.\n- Tests live next to code, e.g. `src/cart.go`.\n\n## Other\n- not a lesson `nope/x.go`\n")
 
 	var out bytes.Buffer
-	printMemory(&out, root, time.Now())
+	printMemory(&out, root, root, time.Now())
 	got := out.String()
 	for _, want := range []string{
 		"MEMORY (.claude/memory): 2 notes; index MEMORY.md 2 lines",
@@ -56,6 +56,19 @@ func TestDigestListsMemoryAndFlagsStaleNotes(t *testing.T) {
 	}
 }
 
+func TestDigestShowsMemoryOutsideTheCheckoutAsFullPath(t *testing.T) {
+	root := t.TempDir()
+	memory := filepath.Join(root, ".claude", "memory")
+	writeTestFile(t, filepath.Join(memory, "a.md"), "plain note\n")
+	worktree := t.TempDir()
+
+	var out bytes.Buffer
+	printMemory(&out, root, worktree, time.Now())
+	if got := out.String(); !strings.Contains(got, "MEMORY ("+memory+"):") {
+		t.Errorf("memory outside the checkout must be a full path:\n%s", got)
+	}
+}
+
 func TestDigestMemoryFollowsTheConfiguredFolder(t *testing.T) {
 	root := t.TempDir()
 	elsewhere := filepath.Join(t.TempDir(), "notes")
@@ -64,13 +77,14 @@ func TestDigestMemoryFollowsTheConfiguredFolder(t *testing.T) {
 	writeTestFile(t, filepath.Join(elsewhere, "a.md"), "plain note, no frontmatter\n")
 
 	var out bytes.Buffer
-	printMemory(&out, root, time.Now())
+	printMemory(&out, root, root, time.Now())
 	if got := out.String(); !strings.Contains(got, "1 notes") || !strings.Contains(got, "a.md") {
 		t.Errorf("configured folder not read:\n%s", got)
 	}
 
 	out.Reset()
-	printMemory(&out, t.TempDir(), time.Now())
+	empty := t.TempDir()
+	printMemory(&out, empty, empty, time.Now())
 	if got := out.String(); !strings.Contains(got, "no notes") || strings.Contains(got, "LESSONS") {
 		t.Errorf("empty project:\n%s", got)
 	}
