@@ -43,6 +43,7 @@ LỆNH HAY DÙNG
   wj verify T-01                 worker: kiểm tra một task trong worktree
   wj digest                      lỗi lặp lại trong các phiên Claude Code của project (cho /orca-dream)
   wj guard                       hook của Claude Code: chặn lượt đọc tốn token (wj init tự gắn)
+  wj trash <file>...             chuyển file vào thùng rác thay vì xoá hẳn (agent dùng thay rm)
   wj update                      cập nhật chính tool này
   wj version                     xem phiên bản
 
@@ -242,7 +243,8 @@ Tool cài (cho Claude Code):
                          không còn ở ~/.claude. File này không vào git: mỗi worktree chạy wj init một lần
   .gitignore             .tmp/, memory, worktree của worker, thư mục build của job
 
-Skill, worker và hook gọi wj plan, wj verify, wj digest, wj guard, nên máy phải có wj.
+wj không bắt buộc: thiếu wj thì skill và worker làm tay các bước wj plan, wj verify (tốn token
+hơn) và hook wj guard tự bỏ qua. Riêng /orca-dream cần wj digest.
 Cách dùng: /orca-orchestrator <mục tiêu> để chia task, rồi /orca-orchestrator go để chạy
 worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: docs/project.md.
 
@@ -301,6 +303,8 @@ func printHelp(args []string, input io.Reader, out io.Writer) error {
 		fmt.Fprintln(out, planHelp)
 	case "verify":
 		fmt.Fprintln(out, verifyHelp)
+	case "trash":
+		fmt.Fprintln(out, trashHelp)
 	case "guard":
 		fmt.Fprintln(out, guardHelp)
 	case "digest", "dream":

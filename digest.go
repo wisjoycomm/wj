@@ -30,6 +30,8 @@ thay, rồi in bản rút gọn:
   DENIED     lệnh bị hỏi quyền hoặc bị chặn
   HANDOVERS  worker báo BLOCKED hoặc PARTIAL
   SESSIONS   mỗi phiên: số lượt, context lớn nhất, số lỗi
+  WASTE      kết quả tool từ 8k token trở lên (gộp theo lệnh), và file bị đọc cả file
+             từ 3 lần trong một phiên
   MEMORY     ghi chú Claude Code tự ghi (.claude/memory): loại, tuổi, số dòng, và
              MISSING khi ghi chú nhắc tới đường dẫn không còn trong project
   LESSONS    số dòng mục "## Lessons" trong AGENTS.md và CLAUDE.local.md, dòng nào MISSING
@@ -66,6 +68,8 @@ type digestReport struct {
 	passed    int               // handovers with STATUS: PASS
 	calls     map[string]string // tool_use id -> "tool\x00input", until its result arrives
 	seen      map[string]bool   // tool_use ids and message ids already counted
+	big       []digestResult    // tool results large enough to matter
+	reads     map[string]int    // "session\x00file" -> times the whole file was read
 }
 
 var (
@@ -123,7 +127,7 @@ func inProject(cwd, root string) bool {
 }
 
 func readDigest(claudeDirs []string, root string, since time.Time) *digestReport {
-	report := &digestReport{sessions: map[string]*digestSession{}, calls: map[string]string{}, seen: map[string]bool{}}
+	report := &digestReport{sessions: map[string]*digestSession{}, calls: map[string]string{}, seen: map[string]bool{}, reads: map[string]int{}}
 	member := map[string]bool{} // cwd -> in this project
 	for _, dir := range claudeDirs {
 		_ = filepath.WalkDir(filepath.Join(dir, "projects"), func(path string, entry fs.DirEntry, err error) error {
@@ -253,11 +257,14 @@ func (r *digestReport) readFile(path, root string, since time.Time, member map[s
 		for _, block := range blocks {
 			switch block.Type {
 			case "tool_use":
+				if _, again := r.calls[block.ID]; !again && !r.seen["t:"+block.ID] {
+					r.countRead(key, block, root)
+				}
 				r.calls[block.ID] = block.Name + "\x00" + toolInput(block.Name, block.Input, root)
 			case "tool_result":
 				call, known := r.calls[block.ToolUseID]
 				delete(r.calls, block.ToolUseID)
-				if !block.IsError || r.seen["t:"+block.ToolUseID] {
+				if r.seen["t:"+block.ToolUseID] {
 					continue
 				}
 				r.seen["t:"+block.ToolUseID] = true
@@ -266,6 +273,12 @@ func (r *digestReport) readFile(path, root string, since time.Time, member map[s
 					tool = "?"
 				}
 				text := resultText(block.Content)
+				if tokens := int64(len(text) / 4); tokens >= bigResultTokens {
+					r.big = append(r.big, digestResult{session: key, tool: tool, input: input, tokens: tokens})
+				}
+				if !block.IsError {
+					continue
+				}
 				session.errors++
 				r.errors = append(r.errors, digestError{session: key, when: when, tool: tool, input: input,
 					text: problemLine(text), denied: deniedPattern.MatchString(cutRunes(text, 400))})
@@ -509,6 +522,7 @@ func (r *digestReport) print(out io.Writer, project string, days int) {
 		fmt.Fprintf(out, "  %-17s %s  %4d turns  %6s  %3d err  %d int  %s\n", shortSession(s.id), s.last.Local().Format("01-02 15:04"),
 			s.turns, compactTokens(s.peak), s.errors, s.interrupts, cutRunes(what, 60))
 	}
+	r.printWaste(out)
 	if oneOff > 0 {
 		fmt.Fprintf(out, "ONE-OFF errors: %d, not listed. For one session's errors: wj digest -session <id>\n", oneOff)
 	}

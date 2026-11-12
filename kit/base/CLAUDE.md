@@ -7,3 +7,4 @@
   - Read with offset/limit for line ranges. On most models Edit only works on a file opened with Read.
 - Use Bash only for what has no built-in tool: `git`, `gh`, `jq`, builds and test runners, and the commands AGENTS.md names.
 - Edit: keep `old_string` to the smallest unique snippet (usually 2-5 lines). Don't stretch it to include the enclosing function header.
+- Subagents: don't start one for what a Grep or a Read answers. One that only searches or reads gets `model: haiku`; one that edits code keeps this session's model unless the task names another.

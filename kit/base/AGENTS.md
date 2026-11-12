@@ -17,7 +17,8 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - Keep each edited snippet as small as possible while still unique in the file.
 
 ## Files you create
-- Temp and scratch files (logs, test output, one-off scripts, downloads) go in `.tmp/` at the repo root, which is gitignored. Never leave them in the repo root or next to source files. Delete them when done.
+- Temp and scratch files (logs, test output, one-off scripts, downloads) go in `.tmp/<task or topic>/` at the repo root, which is gitignored: one folder per task, so it can be found and removed as a whole. Never use another folder (`.temp/`, `tmp/`), the repo root or a place next to source files.
+- Before you report a task done, delete its folder in `.tmp/`. Keep only what the next step needs, and name it in your report.
 - Don't write summary or report files (`SUMMARY.md`, `CHANGES.md`, `NOTES.md`...) after a task: report in chat instead.
 - Write docs only when asked, in `docs/`. When you change behavior that a file in `docs/` describes, update that file in the same change.
 

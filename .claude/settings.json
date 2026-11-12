@@ -41,7 +41,8 @@
       "Agent(orca-worker)",
       "Bash(wj digest *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(wj trash *)"
     ],
     "ask": [
       "Bash(git push)",

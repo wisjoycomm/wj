@@ -33,7 +33,7 @@ var (
 	planPriorities    = []string{"P0", "P1", "P2", "P3"}
 	planPoints        = []string{"1", "2", "3", "5", "8", "13", "?"}
 	planAgentNames    = []string{"claude", "codex", "agy"}
-	planModelPattern  = regexp.MustCompile(`^claude:[A-Za-z0-9][A-Za-z0-9._/\[\]-]*$`)
+	planModelPattern  = regexp.MustCompile(`^(claude|codex|agy):[A-Za-z0-9][A-Za-z0-9._/\[\]-]*$`)
 	planHeaderLine    = "| " + strings.Join(planColumns, " | ") + " |"
 	planSeparatorLine = "|" + strings.Repeat("---|", len(planColumns))
 )
@@ -52,13 +52,22 @@ const planHelp = `PLAN.md dạng một bảng duy nhất (cho orchestrator / wor
                        commit merge và ngày; không có -commit thì tự tìm commit có ID
                        trong git log. Commit riêng từng task: T-01=abc123
 
+  wj plan worker cx/gpt-6.1-sol
+                       tạo worker chạy bằng model hãng khác của gateway (GPT, Gemini...):
+                       .claude/agents/orca-worker-<tên>.md, để dùng claude:<model id>
+                       trong cột Agent. Không tham số: liệt kê worker đã có.
+                       Bảng chọn model theo loại việc: .claude/models.md
+
   Format: chỉ có dòng tiêu đề, dòng ---, và mỗi task một dòng:
 ` + "  | ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |" + `
 
   Pri     P0 (gấp) | P1 | P2 | P3 (để sau)
   SP      story point: 1 | 2 | 3 | 5 | 8 | 13 (13 = tách nhỏ) | ? (chưa ước lượng)
   Status  TODO | DOING | DONE | BLOCKED | PARTIAL
-  Agent   claude | claude:<model> (vd claude:haiku, worker chạy bằng model đó) | codex | agy
+  Agent   claude | codex | agy, hoặc kèm model: claude:haiku, codex:<model>, agy:<model>.
+          claude:<model id của gateway> cần chạy wj plan worker <id> trước.
+          Orchestrator của Claude Code chỉ tự chạy dòng claude; dòng codex / agy nó liệt kê
+          để bạn chạy trong app đó.
   Depends ID cách nhau dấu phẩy, hoặc -
   Scope   đường dẫn trong backtick, cách nhau dấu phẩy
   Verify  một lệnh trong backtick, hoặc - (tự đoán)
@@ -173,7 +182,7 @@ func parsePlan(text string) ([]planTask, []planIssue) {
 			bad("Status %q phải là %s", t.Status, strings.Join(planStatuses, "|"))
 		}
 		if !planAgentOK(t.Agent) {
-			bad("Agent %q phải là %s hoặc claude:<model>", t.Agent, strings.Join(planAgentNames, "|"))
+			bad("Agent %q phải là %s, hoặc một trong số đó kèm :<model> (vd claude:haiku)", t.Agent, strings.Join(planAgentNames, "|"))
 		}
 		for _, d := range t.Depends {
 			if !planIDPattern.MatchString(d) {
@@ -416,7 +425,7 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 	commit := flags.String("commit", "", "archive: commit merge của các task (mặc định tự tìm trong git log)")
 	last := flags.Int("last", 20, "log: số task gần nhất")
 	find := flags.String("find", "", "log: một ID, hoặc chữ trong Task / Notes")
-	if sub == "archive" {
+	if sub == "archive" || sub == "worker" {
 		// IDs come first: wj plan archive T-01 T-02 -commit abc123
 		var ids, rest []string
 		for i, a := range args {
@@ -439,6 +448,9 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 			return errors.New("cách dùng: wj plan log [-last 50] [-find T-12]")
 		}
 		return planLog(out, root, *last, *find)
+	}
+	if sub == "worker" {
+		return planWorker(out, root, flags.Args(), *dry)
 	}
 	path := filepath.Join(root, "PLAN.md")
 	data, err := os.ReadFile(path)
@@ -549,6 +561,12 @@ func planStatus(out io.Writer, root, text string) error {
 		fmt.Fprintln(out, "WAITING:")
 		for _, w := range waiting {
 			fmt.Fprintln(out, "  "+w)
+		}
+	}
+	if lines := planWorkerLines(root, tasks); len(lines) > 0 {
+		fmt.Fprintln(out, "WORKERS (a model of another vendor runs as its own subagent, with no model parameter):")
+		for _, line := range lines {
+			fmt.Fprintln(out, line)
 		}
 	}
 	for _, issue := range issues {

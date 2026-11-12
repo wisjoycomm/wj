@@ -34,6 +34,13 @@ const doctorHelp = `wj doctor - tự kiểm tra máy, báo vấn đề, sửa đ
   - Project bật đo token nhưng proxy không chạy: Claude không kết nối được.
   - MCP lớn cài cho mọi project nhưng chỉ vài project dùng: chuyển về đúng project.
   - PLAN.md sai format bảng: sửa bằng wj plan convert.
+  - Kit của project đang đứng thiếu hoặc cũ hơn wj này (hook wj guard, file cấm
+    đọc, giới hạn output Bash...): sửa bằng wj init.
+  - Context cố định của project: rule, bài học, chỉ mục memory và danh sách
+    skill/agent nạp ở mọi phiên. Luôn in con số; báo khi vượt ngưỡng (rule 3k
+    token, danh sách skill/agent 2k token).
+  - File tạm cũ hơn 7 ngày trong .tmp/ và .temp/ của project: sửa bằng chuyển các
+    file đó vào thùng rác, không xoá vĩnh viễn (file mới hơn giữ nguyên).
 
   Không có AI (không gateway, mất mạng) thì chỉ dùng các luật sửa cứng ở trên.`
 
@@ -77,6 +84,7 @@ func runDoctor(args []string, input io.Reader, out io.Writer) error {
 	cwd, _ := os.Getwd()
 	env := doctorEnv{home: home, since: *since, cwd: cwd}
 	findings := doctorCheck(env)
+	printFixedContext(out, env)
 	if len(findings) == 0 {
 		fmt.Fprintln(out, "Không thấy vấn đề nào.")
 	}
@@ -133,6 +141,9 @@ func doctorCheck(env doctorEnv) []doctorFinding {
 	findings = append(findings, checkProxyHealth(env)...)
 	findings = append(findings, checkUserMCP(env)...)
 	findings = append(findings, checkPlanFormat(env)...)
+	findings = append(findings, checkKit(env)...)
+	findings = append(findings, checkFixedContext(env)...)
+	findings = append(findings, checkScratch(env)...)
 	return findings
 }
 

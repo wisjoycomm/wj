@@ -20,7 +20,8 @@
       "Agent(orca-worker)",
       "Bash(wj plan *)",
       "Bash(wj verify *)",
-      "Bash(wj digest *)"
+      "Bash(wj digest *)",
+      "Bash(wj trash *)"
     ],
     "deny": [
       "Read(/PLAN-ARCHIVE.md)"

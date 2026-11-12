@@ -293,3 +293,69 @@ func TestKitArchiveHeaderMatchesArchiveCommand(t *testing.T) {
 		t.Fatalf("row must follow the kit header directly:\n%s", archive)
 	}
 }
+
+func TestPlanWorkerForAnotherVendorsModel(t *testing.T) {
+	root := t.TempDir()
+	runInitIn(t, root, "-type", "go")
+	var out bytes.Buffer
+	if err := runPlanIn([]string{"worker", "cx/gpt-6.1-sol", "haiku"}, &out, root); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "claude:cx/gpt-6.1-sol") || !strings.Contains(out.String(), "haiku: không cần worker riêng") {
+		t.Errorf("output:\n%s", out.String())
+	}
+	agent := readText(t, filepath.Join(root, ".claude", "agents", "orca-worker-cx-gpt-6-1-sol.md"))
+	for _, want := range []string{"name: orca-worker-cx-gpt-6-1-sol\nmodel: cx/gpt-6.1-sol\n", "isolation: worktree", "wj verify <ID>", "runs on the model cx/gpt-6.1-sol"} {
+		if !strings.Contains(agent, want) {
+			t.Errorf("worker lacks %q:\n%s", want, agent[:400])
+		}
+	}
+	if strings.Count(agent, "name:") != 1 || strings.Count(agent, "\nmodel:") != 1 {
+		t.Errorf("frontmatter:\n%s", agent[:400])
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker-haiku.md")); err == nil {
+		t.Error("an alias needs no worker of its own")
+	}
+	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
+	if !strings.Contains(settings, "Agent(orca-worker-cx-gpt-6-1-sol)") || !strings.Contains(settings, "Agent(orca-worker)") {
+		t.Errorf("settings:\n%s", settings)
+	}
+
+	// Running it again changes nothing; with no model it lists what is there.
+	out.Reset()
+	if err := runPlanIn([]string{"worker", "cx/gpt-6.1-sol"}, &out, root); err != nil || !strings.Contains(out.String(), "đã đúng") {
+		t.Errorf("rerun: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := runPlanIn([]string{"worker"}, &out, root); err != nil || !strings.Contains(out.String(), "claude:cx/gpt-6.1-sol") {
+		t.Errorf("list: %v\n%s", err, out.String())
+	}
+	if err := runPlanIn([]string{"worker", "bad id;rm"}, &out, root); err == nil {
+		t.Error("a bad model id must be refused")
+	}
+
+	// wj plan tells the orchestrator which subagent runs each such task.
+	plan := planHeaderLine + "\n" + planSeparatorLine + "\n" +
+		"| T-01 | UI polish | P1 | 3 | TODO | claude:cx/gpt-6.1-sol | - | `web/` | - | - | - |\n" +
+		"| T-02 | Proof | P1 | 3 | TODO | claude:gm/gemini-4 | - | `math/` | - | - | - |\n" +
+		"| T-03 | Rename | P2 | 1 | TODO | claude:haiku | - | `a/` | - | - | - |\n" +
+		"| T-04 | Port | P2 | 3 | TODO | codex:gpt-6.1 | - | `b/` | - | - | - |\n"
+	writeTestFile(t, filepath.Join(root, "PLAN.md"), plan)
+	out.Reset()
+	if err := runPlanIn(nil, &out, root); err != nil {
+		t.Fatal(err)
+	}
+	status := out.String()
+	for _, want := range []string{
+		"claude:cx/gpt-6.1-sol -> subagent_type orca-worker-cx-gpt-6-1-sol (ok)",
+		"claude:gm/gemini-4 -> subagent_type orca-worker-gm-gemini-4 (MISSING: run wj plan worker gm/gemini-4",
+		"T-04   codex:gpt-6.1",
+	} {
+		if !strings.Contains(status, want) {
+			t.Errorf("wj plan lacks %q:\n%s", want, status)
+		}
+	}
+	if strings.Contains(status, "FORMAT") || strings.Contains(status, "orca-worker-haiku") {
+		t.Errorf("wj plan:\n%s", status)
+	}
+}

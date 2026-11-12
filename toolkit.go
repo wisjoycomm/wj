@@ -48,6 +48,8 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 		return runVerify(args[1:], out)
 	case "digest":
 		return runDigest(args[1:], out)
+	case "trash":
+		return runTrash(args[1:], out)
 	case "guard":
 		return runGuard(args[1:], input, out)
 	case "init":

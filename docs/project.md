@@ -24,12 +24,18 @@ Kit có hai lớp, cùng một nguồn (`kit/base` và `kit/orca`):
 
 - Lite vẫn tiết kiệm token nhờ thứ Claude Code tự cưỡng chế (rule deny, giới hạn output). Nó không có: chặn đọc cả
   file dài, chặn đường vòng qua shell (`cat .env`), và chạy task song song.
+- Chọn model ở bản lite: không có orchestrator nên không có bảng `.claude/models.md`. Bạn tự chọn model của phiên
+  bằng `/model`; `CLAUDE.md` chỉ dặn một điều: subagent chỉ tìm và đọc thì chạy `haiku`, và đừng mở subagent cho việc
+  một lượt Grep hay Read làm được.
+- Bài học ở bản lite: tự viết vào mục `## Lessons` của `AGENTS.md` (ngoài các khối `wj:begin`). Không có
+  `/orca-dream` lọc giúp, nên giữ mục này ngắn.
 - Người không cài `wj`: mỗi bản release có `wj-kit-lite-<job>.zip` (`general`, `unity`, `web`, `go`, `python`), do
   chính `wj init -lite` sinh ra. Giải nén vào gốc project **mới**. Project đã có `AGENTS.md`, `.gitignore` hay
   `.claude/settings.json` thì đừng giải nén đè: gộp tay, vì zip không biết gộp như `wj init`.
 - Nâng từ lite lên đủ: cài `wj` rồi chạy `wj init`. Tool chỉ thêm phần còn thiếu.
 - Repo cài mức đủ, nhưng một người trong nhóm không có `wj`: hook tự bỏ qua (không báo lỗi, không chặn gì), rule
-  và file cấm đọc vẫn có tác dụng. Skill Orca thì không chạy được, và model được dặn báo "thiếu wj" rồi dừng.
+  và file cấm đọc vẫn có tác dụng. Skill orchestrator và worker chuyển sang làm tay các bước `wj plan`, `wj verify` (tốn token hơn); riêng
+  `/orca-dream` cần `wj digest` nên báo thiếu rồi dừng.
 
 Kit nhắm vào Claude Code. Tool thêm rule chung, rule theo job, `PLAN.md`, `PLAN-ARCHIVE.md` (bảng trống),
 `.claude/settings.json`, `.gitignore`, hai skill (`/orca-orchestrator`, `/orca-dream`) và subagent `orca-worker`.
@@ -52,7 +58,10 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
   trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
 
-Skill, worker và hook gọi `wj plan`, `wj verify`, `wj digest`, `wj guard`, nên máy cần có `wj` (không cần `pwsh`). Project cài bằng
+`wj` là phần phụ, không bắt buộc. Skill và worker gọi `wj plan`, `wj verify`; máy không có `wj` (hoặc `wj` cũ hơn số
+ghi trong `.claude/wj-kit`) thì chúng làm tay các bước đó, tốn token hơn. Hook `wj guard` thì tự bỏ qua. Riêng
+`/orca-dream` cần `wj digest`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
+lite không có file này); `wj init -update` ghi lại số mới. Project cài bằng
 kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
 `orca-stateless-worker` cũ. `CLAUDE.md` đã có thì tool không sửa; muốn lấy bản mới thì xoá file rồi chạy lại `wj init`.
 
@@ -101,16 +110,51 @@ Mỗi worker (`.claude/agents/orca-worker.md`) nhận đúng một dòng của `
 `TASK: ... | STATUS: PASS|PARTIAL|BLOCKED | ...`. Orchestrator ghi kết quả vào `PLAN.md` và in lệnh
 `git diff HEAD...<nhánh>` để bạn xem. Nó không tự merge: phải có lệnh `merge` của bạn.
 
-Orchestrator chọn model cho worker theo task, ghi ở cột Agent:
+### Model nào làm việc nào
 
-| Task | Agent |
+Orchestrator chọn model cho từng task lúc lập kế hoạch và ghi vào cột Agent. Bảng chọn nằm trong
+`.claude/models.md`: file này của bạn, `wj init` không ghi đè, và nó không được nạp vào phiên nên không tốn token
+cho tới khi lập kế hoạch. Bản mặc định:
+
+| Loại việc (dòng khớp đầu tiên thắng) | Agent |
+|---|---|
+| Bảo mật: đăng nhập, quyền, mã hoá, secret, kiểm tra input | `claude:opus` |
+| Toán và thuật toán: code số, hình học, thống kê, tối ưu, parser | `claude:opus` |
+| UI: bố cục, style, component, chỉnh giao diện | `claude:sonnet` |
+
+| Việc còn lại, theo cỡ và rủi ro | Agent |
 |---|---|
 | SP 1-2, đã rõ từng bước (đổi tên, sửa nhỏ, thêm test, docs) | `claude:haiku` |
 | SP 3-5, việc thường | `claude:sonnet` |
-| Rủi ro hoặc chưa rõ (đồng thời, bảo mật, migrate dữ liệu, đổi nhiều module) | `claude:opus` |
+| Rủi ro hoặc chưa rõ (đồng thời, migrate dữ liệu, đổi nhiều module) | `claude:opus` |
 
-Task bị BLOCKED sau khi đã thử thật thì chạy lại ở bậc cao hơn. Muốn dùng model khác thì nêu tên cho
-orchestrator; `haiku` `sonnet` `opus` là bậc, gateway của bạn quyết định mỗi bậc là model nào (xem [Model](model.md)).
+Task bị BLOCKED sau khi đã thử thật thì chạy lại ở bậc cao hơn. `haiku` `sonnet` `opus` là bậc, gateway của bạn
+quyết định mỗi bậc là model nào (xem [Model](model.md)).
+
+**Model hãng khác (GPT, Gemini, DeepSeek...).** Worker chạy được bằng bất kỳ model nào gateway phục vụ cho Claude
+Code. Tool Agent của Claude Code chỉ nhận `sonnet`, `opus`, `haiku`, `fable` làm model của subagent, nhưng một file
+subagent thì ghi được model id bất kỳ. Vì vậy mỗi model hãng khác có một bản worker riêng:
+
+```text
+wj models test                  chỉ dùng id có OK ở cột Claude Code
+wj plan worker cx/gpt-6.1-sol   tạo .claude/agents/orca-worker-cx-gpt-6-1-sol.md (model: cx/gpt-6.1-sol)
+                                và thêm quyền Agent(...) vào settings
+wj plan worker                  liệt kê worker đã tạo
+```
+
+Rồi sửa `.claude/models.md`, ví dụ đổi dòng UI thành `claude:cx/gpt-6.1-sol`, commit, và mở lại Claude Code
+(subagent mới chỉ được nạp khi mở phiên). `wj plan` in mục WORKERS cho orchestrator biết task nào chạy bằng
+subagent nào, và báo `MISSING` kèm lệnh cần chạy nếu chưa tạo. Chạy lại `wj plan worker <id>` sau khi
+`orca-worker.md` đổi để bản riêng theo kịp.
+
+Model hãng khác qua Claude Code không được hãng hỗ trợ chính thức: tool hoặc phiên dài có thể lỗi dù bài thử ngắn
+qua. Giao task nhỏ trước. Đã thử (Claude Code 2.1.322, 2026-11-12): subagent có `model: cx/gpt-6.1-sol` gửi đúng id
+đó lên API; chưa thử chạy một task thật bằng model hãng khác.
+
+**Agent khác (Codex, Antigravity).** Cột Agent cũng nhận `codex`, `agy`, hoặc kèm model: `codex:<model>`,
+`agy:<model>`, và dùng được trong `.claude/models.md` như mọi giá trị khác. Orchestrator của Claude Code chỉ tự chạy
+dòng `claude`; task `codex` / `agy` nó để `TODO` và liệt kê ra để bạn chạy trong app đó. Dòng task, Scope và Verify
+giống nhau cho mọi agent.
 
 ## Memory và dreaming
 
@@ -136,7 +180,7 @@ sai. `/orca-dream` làm hai việc đó, ngoài phiên làm việc:
 
 ```text
 wj digest                  7 ngày của project: lỗi tool lặp lại, bị từ chối, handover không PASS,
-                           rồi danh sách ghi chú memory và độ dài các mục Lessons
+                           chỗ lãng phí context, rồi ghi chú memory và độ dài các mục Lessons
 wj digest -days 14
 wj digest -session 1acf    mọi lỗi của một phiên
 /orca-dream                đọc digest, đề xuất tối đa 5 sửa lỗi + 5 thay đổi memory, kèm chứng cứ
@@ -146,6 +190,13 @@ wj digest -session 1acf    mọi lỗi của một phiên
 worktree của repo. Lệnh chỉ thấy lệnh thoát với mã lỗi: lỗi bị che sau `| tail` hay `|| true` không được đếm.
 `/orca-dream` ưu tiên cách sửa mà harness cưỡng chế được (quyền trong `settings.json`, lệnh Verify, bước trong
 `orca-worker.md`) rồi mới tới một dòng bài học.
+
+**Lãng phí context.** Mục WASTE của digest có hai phần. BIG RESULTS: mỗi kết quả tool từ 8.000 token trở lên,
+gộp theo lệnh gây ra nó (số lần, tổng token, phiên nào). READ AGAIN: cùng một file bị Read cả file từ 3 lần trong
+một phiên; đọc theo khoảng (`offset` + `limit`) không tính. Một kết quả tool nằm lại trong hội thoại và bị gửi lại ở
+mọi lượt sau, nên nó tốn hơn nhiều so với kích thước của chính nó. `/orca-dream` xử lý dòng nào lặp từ 2 lần hoặc
+lớn từ 20.000 token: thêm rule deny, thêm cờ quiet vào lệnh Verify, hoặc một dòng rule. Token ở đây là ước lượng
+(số ký tự / 4), không phải số đo từ gateway.
 
 **Lọc memory.** Mục MEMORY của digest liệt kê mỗi ghi chú một dòng (file, loại, tuổi, số dòng, mô tả), cũ nhất
 trước. `MISSING:` nghĩa là ghi chú nhắc tới một đường dẫn không còn trong project; đây là gợi ý để kiểm tra, không
@@ -247,11 +298,51 @@ Lệnh tìm:
 - MCP cài cho mọi project nhưng chỉ vài project dùng trong 30 ngày. Sửa: chuyển về đúng các
   project đó bằng chính lệnh `claude mcp`, không gọi được thì bỏ khỏi phạm vi chung.
 - `PLAN.md` kiểu cũ hoặc sai format.
+- Kit của project đang đứng thiếu hoặc cũ hơn `wj` này. Lệnh chạy thử `wj init` (không ghi gì) và liệt kê thứ
+  init sẽ thêm: hook `wj guard`, file cấm đọc, giới hạn output Bash, khối rule. Sửa: `wj init`. Project cài bản
+  lite thì chỉ so với bản lite. Project có `CLAUDE.md` hay `AGENTS.md` mà chưa cài kit thì chỉ được nhắc.
+- Context cố định quá lớn. Đây là phần nạp ở **mọi lượt của mọi phiên và mọi worker**:
+  - rule và memory: `CLAUDE.md` và các file nó import bằng `@` (như `AGENTS.md`), `CLAUDE.local.md`,
+    `~/.claude/CLAUDE.md`, chỉ mục `MEMORY.md`. Ngưỡng báo: 3.000 token.
+  - danh sách skill và agent: tên + mô tả của từng cái, ở project và ở `~/.claude`. Skill có
+    `disable-model-invocation: true` không tính vì model không thấy nó. Ngưỡng báo: 2.000 token.
+
+  Mục này không tự sửa: chạy `/orca-dream` để xoá rule và bài học cũ, hoặc rút ngắn mô tả skill.
+
+- File tạm cũ hơn 7 ngày trong `.tmp/` và `.temp/`, ở project đang đứng (cả checkout chính nếu đang ở worktree) và
+  các project đã bật đo token. Lệnh báo số file, dung lượng, file cũ nhất và vài file lớn nhất. Sửa: chuyển đúng các
+  file cũ đó **vào thùng rác** (không xoá vĩnh viễn, khôi phục được) và bỏ thư mục con bị rỗng; file mới hơn 7 ngày (như `.tmp/handover.md` đang dùng) được giữ. Rule trong
+  `AGENTS.md` dặn agent để file tạm theo `.tmp/<task>/` và xoá thư mục đó trước khi báo xong, nhưng đó chỉ là
+  lời nhắc; mục này của doctor là lưới đỡ khi agent quên.
+
+Dòng đầu của `wj doctor` luôn in context cố định của project đang đứng, kể cả khi chưa vượt ngưỡng:
+
+```text
+Context cố định của project này: ~1.1k token mỗi phiên (rule và memory ~1.0k, danh sách skill/agent ~136).
+```
+
+Con số là ước lượng (byte / 4) và chưa gồm system prompt, tool có sẵn và tool MCP, vì chúng không nằm trong file.
 
 `-ai` chỉ gửi các dòng báo cáo (đường dẫn, số đếm) lên gateway trong `~/.claude/settings.json`,
 không gửi key hay code. Không có gateway hoặc mất mạng thì vẫn chạy với các luật sửa cứng.
 
 Proxy nền: `wj proxy bg` bật, `wj proxy stop` tắt, `wj proxy restart` nạp addon mới.
+
+## Xoá vào thùng rác: wj trash
+
+```text
+wj trash <file hoặc thư mục>...
+```
+
+Lệnh chuyển file vào thùng rác của hệ điều hành thay vì xoá hẳn: Recycle Bin trên Windows, `~/.Trash` trên macOS,
+thùng rác XDG (`~/.local/share/Trash`, có file `.trashinfo` để khôi phục) trên Linux. Một đường dẫn không tồn tại
+thì lệnh dừng và chưa chuyển gì. Không chuyển được (khác ổ đĩa, hết quyền) thì lệnh báo lỗi và để nguyên file: nó
+không bao giờ xoá vĩnh viễn.
+
+- Kit bản đủ dặn agent xoá bằng `wj trash`, không dùng `rm`, và cho phép sẵn `Bash(wj trash *)`.
+- `/orca-dream` xoá ghi chú memory đã duyệt bằng lệnh này; `wj doctor` dọn file tạm cũ cũng bằng nó.
+- Đã thử trên Windows (2026-11-12): file và thư mục vào Recycle Bin kèm vị trí gốc. Bản macOS và Linux mới được
+  kiểm bằng test tự động, chưa thử tay.
 
 ## So cấu hình giữa các agent
 

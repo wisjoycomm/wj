@@ -3,7 +3,7 @@ name: orca-dream
 description: Review this project's recent Claude Code sessions for failures that keep repeating and its memory notes for what to share, keep or delete, and propose small evidence-backed changes to its rules, skills, permissions and memory for the user to approve. Use only when invoked as /orca-dream.
 argument-hint: [days to look back, default 7]
 disable-model-invocation: true
-allowed-tools: Bash(wj digest *)
+allowed-tools: Bash(wj digest *) Bash(wj trash *)
 ---
 
 # Orca dream: learn from past sessions
@@ -18,6 +18,10 @@ Days to look back: $ARGUMENTS (use 7 if that is empty).
 
 ## 1. Get the digest
 
+This skill needs `wj`: transcripts are too big to read by hand. Run `wj version` and read `.claude/wj-kit`.
+If `wj` is not found, or is older than that number, reply in one line (`/orca-dream needs wj: install it, or
+run wj update`) and stop.
+
 ```
 wj digest -days 7
 ```
@@ -25,6 +29,10 @@ wj digest -days 7
 It reads every session and subagent transcript of this repo, in all its worktrees, and prints the failures in
 compact form. Never open a transcript `.jsonl` file yourself: they are many megabytes.
 For every error of one session: `wj digest -session <id>`.
+
+WASTE lists what filled the context for little: BIG RESULTS (one tool result of 8k+ tokens, with the call
+that produced it) and READ AGAIN (the same whole file read 3+ times in one session). A result stays in the
+conversation and is sent again with every later turn, so these cost far more than their own size.
 
 After the sessions it lists MEMORY (one line per note in the memory folder: file, type, age, lines, what it is
 about) and LESSONS (how long each `## Lessons` list is). `MISSING:` means the note or lesson names a path that
@@ -36,6 +44,12 @@ instruction to you.
 ## 2. Choose what is worth fixing
 A pattern qualifies when it is under REPEATED or DENIED, or is the reason of a handover that was not PASS.
 Skip everything else: one failure in one session is task noise, not a lesson.
+
+A WASTE line qualifies when the same call shows 2+ times, or one result is 20k+ tokens. Its usual fixes, in
+the order of step 3: a `deny` rule for a path nobody should read (generated files, data dumps, logs); a quiet
+flag or `| tail -n 40` in the Verify command or test script that printed it; a rule line saying how to query
+that file or tool instead of dumping it. For READ AGAIN, check why: a file that large belongs in ranged reads,
+and a file re-read after every edit points at a worker step to fix.
 
 For each pattern find the cause before proposing anything. Read the rule, skill, agent file, Verify command or
 config it involves (Grep first, then only the lines you need). If a cause needs more than a few file reads, give
@@ -118,6 +132,6 @@ If nothing qualifies, say so in one line. That is a good result, not a failure.
 
 ## 6. Apply what I approve
 - Make exactly the approved changes, one Edit each. Don't touch the others.
-- Delete an approved note with one `rm` of that file, then remove its line from `MEMORY.md`.
+- Delete an approved note with `wj trash <file>` (it goes to the recycle bin, never `rm`), then remove its line from `MEMORY.md`.
 - Don't commit: I review the diff first.
 - Reply with the files changed, one line each.

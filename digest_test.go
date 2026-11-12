@@ -171,3 +171,52 @@ func TestInProjectRecognisesWorktreesAndRemovedFolders(t *testing.T) {
 		}
 	}
 }
+
+func TestDigestListsWaste(t *testing.T) {
+	home := t.TempDir()
+	repo := filepath.Join(t.TempDir(), "shop")
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	big := strings.Repeat("x", 4*bigResultTokens)
+	file := filepath.Join(repo, "src", "cart.ts")
+	main := &transcript{t: t, cwd: repo, when: time.Now().Add(-time.Hour)}
+	main.tool("Bash", map[string]any{"command": "npm test -- --run 12"}, big, false)
+	main.tool("Bash", map[string]any{"command": "npm test -- --run 13"}, big+big, false)
+	main.tool("Bash", map[string]any{"command": "git status"}, "clean", false)
+	for i := 0; i < 3; i++ {
+		main.tool("Read", map[string]any{"file_path": file}, "small", false)
+	}
+	// Reading ranges of a file is the right way: not counted.
+	for i := 0; i < 4; i++ {
+		main.tool("Read", map[string]any{"file_path": filepath.Join(repo, "src", "big.ts"), "offset": 100 * i, "limit": 100}, "small", false)
+	}
+	main.write(filepath.Join(home, ".claude", "projects", "shop", "33333333-cccc.jsonl"))
+
+	report := readDigest([]string{filepath.Join(home, ".claude")}, repo, time.Now().AddDate(0, 0, -7))
+	var out bytes.Buffer
+	report.print(&out, "shop", 7)
+	text := out.String()
+	for _, want := range []string{
+		"WASTE",
+		"BIG RESULTS (one tool result of 8.0k+ tokens): 2 results, ~24.0k tokens",
+		"~24.0k  2x  Bash `npm test -- --run 12`  sessions: 33333333",
+		"READ AGAIN (the same whole file read 3+ times in one session):",
+		"3x  33333333  ./src/cart.ts",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing %q in:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "big.ts") || strings.Contains(text, "git status") {
+		t.Errorf("ranged reads and small results are not waste:\n%s", text)
+	}
+
+	// Nothing wasted: no section at all.
+	quiet := &digestReport{sessions: map[string]*digestSession{"a": {id: "a"}}, reads: map[string]int{}}
+	out.Reset()
+	quiet.print(&out, "shop", 7)
+	if strings.Contains(out.String(), "WASTE") {
+		t.Errorf("empty waste section printed:\n%s", out.String())
+	}
+}

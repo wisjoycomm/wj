@@ -205,8 +205,73 @@ func planInit(root string, stacks []string, update, lite bool) ([]initChange, er
 		}
 		changes = append(changes, change)
 	}
+	// The skills read the version file, so a lite kit has no use for it.
+	if change, ok := planKitVersion(root, update); ok && !lite {
+		changes = append(changes, change)
+	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].path < changes[j].path })
 	return append(changes, old...), nil
+}
+
+// kitVersionFile records the wj version that installed the kit. The skills
+// read it: a wj older than this number may lack a command they call, so they
+// fall back to doing the step by hand.
+const kitVersionFile = ".claude/wj-kit"
+
+// planKitVersion writes the running wj's version to kitVersionFile: on first
+// install, and on -update. A dev build (no version) writes nothing.
+func planKitVersion(root string, update bool) (initChange, bool) {
+	version := strings.TrimSpace(buildVersion)
+	if version == "" {
+		return initChange{}, false
+	}
+	path := filepath.Join(root, filepath.FromSlash(kitVersionFile))
+	old, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return initChange{path: path, text: version + "\n", write: true, status: "tạo (wj " + version + ")"}, true
+	case err != nil:
+		return initChange{}, false
+	case strings.TrimSpace(string(old)) == version:
+		return initChange{path: path, status: "đã đúng"}, true
+	case update:
+		return initChange{path: path, text: version + "\n", write: true, status: "cập nhật (wj " + version + ")"}, true
+	}
+	return initChange{path: path, status: "giữ nguyên (kit từ wj " + strings.TrimSpace(string(old)) + ") - lấy bản mới: wj init -update"}, true
+}
+
+// addToWjBlock appends lines to the file's "# wj init" block, so running init
+// again (or after an update) never stacks a new header. A file without one
+// gets the block at the end. The file's own line ending is kept.
+func addToWjBlock(text string, lines []string) string {
+	eol := "\n"
+	if strings.Contains(text, "\r\n") {
+		eol = "\r\n"
+	}
+	rows := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	if len(rows) > 0 && rows[len(rows)-1] == "" {
+		rows = rows[:len(rows)-1]
+	}
+	header := -1
+	for i, row := range rows {
+		if strings.TrimSpace(row) == "# wj init" {
+			header = i
+		}
+	}
+	if header < 0 {
+		if len(rows) > 0 {
+			rows = append(rows, "")
+		}
+		rows = append(rows, "# wj init")
+		rows = append(rows, lines...)
+	} else {
+		end := header + 1
+		for end < len(rows) && strings.TrimSpace(rows[end]) != "" {
+			end++
+		}
+		rows = append(rows[:end], append(append([]string{}, lines...), rows[end:]...)...)
+	}
+	return strings.Join(rows, eol) + eol
 }
 
 // planLayer copies a layer's files. Its rules and settings are merged into the
@@ -558,14 +623,7 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 	if len(missing) == 0 {
 		return initChange{path: path, status: "đã đúng"}, nil
 	}
-	text := string(data)
-	if text != "" && !strings.HasSuffix(text, "\n") {
-		text += "\n"
-	}
-	if text != "" {
-		text += "\n"
-	}
-	text += "# wj init\n" + strings.Join(missing, "\n") + "\n"
+	text := addToWjBlock(string(data), missing)
 	status := "tạo"
 	if hasFile {
 		status = fmt.Sprintf("thêm %d dòng", len(missing))

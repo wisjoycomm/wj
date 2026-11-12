@@ -43,7 +43,7 @@ PLAN.md is ONE Markdown table and nothing else: no title, no comments, no lists,
 | Pri | `P0` urgent, `P1` high, `P2` normal, `P3` later |
 | SP | Story points, agile scale: `1` `2` `3` `5` `8` `13`, or `?` not estimated. 8+ means split it. |
 | Status | `TODO` `DOING` `DONE` (not merged yet) `BLOCKED` `PARTIAL` |
-| Agent | `claude`, or `claude:<model>` to run the worker on a named model, e.g. `claude:haiku` |
+| Agent | Who runs it: `claude`, `codex` or `agy`, alone or with a model, e.g. `claude:haiku`, `claude:cx/gpt-6.1-sol`, `codex:<model>` |
 | Depends | IDs separated by commas, or `-` |
 | Scope | Paths in backticks separated by commas, or `-` |
 | Verify | One non-interactive command in backticks, or `-` to auto-detect |
@@ -85,7 +85,10 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
 ## 1. Plan
 - Turn the goal into tasks. Each task is one row. Keep each task small (1-3 files, SP 1-5).
 - Set Pri from what I asked for first; set SP from size and risk.
-- Set Agent from the task, so a cheap model does the simple work:
+- Set Agent from the task, so a cheap model does the simple work and the right model does the special work.
+  Read `.claude/models.md` once: it maps kinds of work (security, math, UI...) and sizes to an Agent value, and
+  may name models of other vendors or other coding agents. Follow it exactly; it also says where a BLOCKED
+  task goes when you relaunch it. If the file is missing, use this:
 
   | Task | Agent |
   |---|---|
@@ -93,8 +96,8 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
   | SP 3-5: ordinary feature or bug work | `claude:sonnet` |
   | Risky or unclear whatever its size: concurrency, security, data migration, a change across modules | `claude:opus` |
 
-  If I named models for this project, use my names instead. Plain `claude` means the model this session runs on.
-- A task that came back BLOCKED after a real attempt goes up one step (haiku -> sonnet -> opus) when you relaunch it.
+  With this table, a task that came back BLOCKED after a real attempt goes up one step (haiku -> sonnet -> opus)
+  when you relaunch it. If I named a model for a task in this conversation, use my name. Plain `claude` means the model this session runs on.
 - Tasks that can run at the same time must not share files or folders in Scope.
 - Find the right files with Grep/Glob before writing Scope. Don't read whole files.
 
@@ -104,10 +107,22 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
 - Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
   last commit, so a worker only sees what is committed.
 - Start all of them in one message, one Agent call per task:
-  - `subagent_type`: `orca-worker`
   - `description`: the ID and a few words, e.g. `T-01 cart discount`
   - `prompt`: that task's PLAN.md row, the whole line, nothing else
-  - `model`: only when Agent is `claude:<model>`; pass `<model>`
+  - `subagent_type` and `model`, from the task's Agent:
+
+    | Agent | subagent_type | model |
+    |---|---|---|
+    | `claude` | `orca-worker` | (none) |
+    | `claude:haiku`, `claude:sonnet`, `claude:opus`, `claude:fable` | `orca-worker` | the name after the colon |
+    | `claude:<any other id>` | the one `wj plan` shows for it under WORKERS | (none: the subagent carries its model) |
+    | `codex`, `agy`, with or without a model | don't start it | |
+
+  - A WORKERS line that says `MISSING`: don't start that task. Tell me the command on that line; a new
+    subagent only loads when Claude Code is reopened.
+    Without wj: the subagent is `orca-worker-` plus the id in lower case with every run of characters other
+    than a-z and 0-9 turned into one `-`; it exists if `.claude/agents/<that name>.md` does.
+  - A `codex` or `agy` task stays `TODO`. List these tasks for me with their IDs: I run them in that app.
 - Workers run in the background. Tell me which ones started, then end your turn: don't wait or poll.
 
 ## 3. Record
