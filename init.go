@@ -50,6 +50,22 @@ func kitSource(rel string) string {
 	return kitOrca + "/" + rel
 }
 
+// workerRel is the project path of the worker subagent.
+const workerRel = ".claude/agents/orca-worker.md"
+
+// unityWorkerSource is the worker for a project with a unity job: it works in
+// the shared checkout, with no worktree.
+const unityWorkerSource = kitStacks + "/unity/dot-claude/agents/orca-worker.md"
+
+// kitOverrides maps project paths to the kit file that replaces the Orca
+// layer's copy for these jobs.
+func kitOverrides(stacks []string) map[string]string {
+	if containsName(stacks, "unity") {
+		return map[string]string{workerRel: unityWorkerSource}
+	}
+	return nil
+}
+
 // initStack is one kind of job. Its files live in kit/stacks/<id>/: rules.md
 // goes into AGENTS.md, gitignore into .gitignore, settings.json (optional) into
 // .claude/settings.json.
@@ -179,7 +195,7 @@ func detectStacks(root string) []string {
 func planInit(root string, stacks []string, update, lite bool) ([]initChange, error) {
 	var changes []initChange
 	for _, layer := range kitLayers(lite) {
-		copied, err := planLayer(root, layer, update)
+		copied, err := planLayer(root, layer, update, kitOverrides(stacks))
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +299,7 @@ func addToWjBlock(text string, lines []string) string {
 
 // planLayer copies a layer's files. Its rules and settings are merged into the
 // project's own files instead, by planAgents and planSettings.
-func planLayer(root, layer string, update bool) ([]initChange, error) {
+func planLayer(root, layer string, update bool, overrides map[string]string) ([]initChange, error) {
 	var changes []initChange
 	err := fs.WalkDir(kitFS, layer, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
@@ -292,6 +308,9 @@ func planLayer(root, layer string, update bool) ([]initChange, error) {
 		rel := kitTarget(strings.TrimPrefix(path, layer+"/"))
 		if rel == "AGENTS.md" || rel == "rules.md" || rel == ".claude/settings.json" {
 			return nil
+		}
+		if source, ok := overrides[rel]; ok {
+			path = source
 		}
 		data, err := kitFS.ReadFile(path)
 		if err != nil {

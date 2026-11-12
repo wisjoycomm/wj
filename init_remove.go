@@ -75,7 +75,16 @@ func planRemove(root string) ([]initChange, error) {
 			if err != nil {
 				return err
 			}
-			if bytes.Equal(normalizeEOL(have), normalizeEOL(kit)) {
+			same := bytes.Equal(normalizeEOL(have), normalizeEOL(kit))
+			// A unity project got the shared-checkout worker instead.
+			if source, ok := kitOverrides([]string{"unity"})[rel]; ok && !same {
+				alt, err := kitFS.ReadFile(source)
+				if err != nil {
+					return err
+				}
+				same = bytes.Equal(normalizeEOL(have), normalizeEOL(alt))
+			}
+			if same {
 				changes = append(changes, initChange{path: target, remove: true, status: "gỡ (giống bản kit)"})
 			} else {
 				changes = append(changes, initChange{path: target, status: "giữ nguyên (bạn đã sửa)"})
