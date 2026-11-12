@@ -19,6 +19,19 @@ func TestComposeOverlayKeepsTextOpaqueOverSeeThroughBackground(t *testing.T) {
 	}
 }
 
+func TestComposeBorderMarksEdgeAndRule(t *testing.T) {
+	const w, h = 10, 8
+	pix := make([]byte, w*h*4)
+	composeBorder(pix, w, h, 0, [3]byte{200, 200, 200}, 255, 2, 4, 1)
+	at := func(x, y int) []byte { i := (y*w + x) * 4; return pix[i : i+4] }
+	if at(0, 3)[3] != 255 || at(5, 0)[3] != 255 || at(3, 4)[3] != 255 {
+		t.Errorf("edge or rule missing: %v %v %v", at(0, 3), at(5, 0), at(3, 4))
+	}
+	if at(5, 2)[3] != 0 || at(1, 4)[3] != 0 {
+		t.Errorf("interior touched: %v %v", at(5, 2), at(1, 4))
+	}
+}
+
 func TestCornerCoverageRoundsOnlyTheCorners(t *testing.T) {
 	if got := cornerCoverage(0, 0, 40, 20, 6); got != 0 {
 		t.Errorf("corner = %v", got)
