@@ -180,8 +180,10 @@ một project.
   wj top -once            in một lần
   wj overlay              cửa sổ nhỏ luôn nổi: mọi project đang mở/đang chạy và tổng cả máy;
                           project mới tự hiện; bấm đúp để xem chi tiết, kéo để đổi chỗ,
-                          chuột phải để đóng
-  wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt
+                          chuột phải mở menu: khoảng thời gian, độ trong suốt, cỡ chữ, đóng.
+                          Cài đặt được nhớ trong overlay.json
+  wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt,
+                          có thanh màu dưới dòng tổng
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
                           Kỳ: day, week, month (1 2 3); ← → kỳ trước/sau; ↑↓ cuộn. Tab vào danh sách lệnh,
