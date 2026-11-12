@@ -133,10 +133,12 @@ func lessonLines(text string) (lines []string, numbers []int) {
 	return lines, numbers
 }
 
-func printMemory(out io.Writer, root string, now time.Time) {
+// printMemory reports the memory folder of the project root. here is the
+// checkout the command runs in: a folder outside it is shown as a full path.
+func printMemory(out io.Writer, root, here string, now time.Time) {
 	dir := memoryDir(root)
 	shownDir := dir
-	if rel, err := filepath.Rel(root, dir); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(here, dir); err == nil && !strings.HasPrefix(rel, "..") {
 		shownDir = filepath.ToSlash(rel)
 	}
 	entries, _ := os.ReadDir(dir)
