@@ -67,6 +67,9 @@ const (
 var bgPixel = [3]byte{0x1D, 0x18, 0x16}     // blue, green, red
 var borderPixel = [3]byte{0x6A, 0x62, 0x5C} // blue, green, red
 
+// barPixels is the usage bar's fill by warn level: green, yellow from 80%, red when over.
+var barPixels = [3][3]byte{{0x80, 0xDE, 0x4A}, {0x3C, 0xC8, 0xFF}, {0x60, 0x60, 0xFF}}
+
 var (
 	user32   = windows.NewLazySystemDLL("user32.dll")
 	gdi32    = windows.NewLazySystemDLL("gdi32.dll")
@@ -188,9 +191,11 @@ type overlayFrame struct {
 	title, total, footer, whole string
 	expanded                    bool
 	warnLevel                   int
+	used, limit                 int64 // the window's total and the -warn limit; limit 0 means no bar
 }
 
 type overlayView struct {
+	used       int64
 	mu         sync.Mutex
 	footer     string
 	title      string
@@ -343,6 +348,7 @@ func overlayFeed(window time.Duration, home string, hwnd uintptr) {
 		overlay.mu.Lock()
 		overlay.lines, overlay.detail, overlay.total, overlay.footer, overlay.whole = lines, detail, shown, footer, whole
 		overlay.warnLevel = warnLevel(total.Total, overlay.warn)
+		overlay.used = total.Total
 		overlay.mu.Unlock()
 		postMessage.Call(hwnd, wmSnapshot, 0, 0)
 		time.Sleep(overlayRefresh)
@@ -364,6 +370,7 @@ func overlayDetailLine(row overlayDetailEntry, now time.Time) overlayLine {
 	}
 	if row.Sub {
 		line.Detail[2] = cutRunes(row.Model, 20)
+		line.Project = "   ›" // indent: this line belongs to the project above
 		return line
 	}
 	line.Project = cutRunes(row.Project, 32)
@@ -445,7 +452,8 @@ func drawText(hdc uintptr, x, y int32, text string, color uint32) {
 
 type overlayLayout struct {
 	pad, gap, rowHeight, dot int32
-	headerHeight, headerBase int32 // header block (with its rule) and its text height
+	headerHeight, headerBase int32 // header block (with its rule and bar) and its text height
+	barHeight                int32 // 0 without -warn
 	columns                  []int32
 	width, height            int32
 }
@@ -471,6 +479,10 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	selectObject.Call(hdc, overlay.big)
 	_, l.headerBase = textWidth(hdc, "Ag")
 	l.headerHeight = l.headerBase + overlay.px(7)
+	if f.limit > 0 {
+		l.barHeight = overlay.px(4)
+		l.headerHeight += l.barHeight + overlay.px(4)
+	}
 	selectObject.Call(hdc, overlay.font)
 	rows := int32(len(f.lines))
 	if f.expanded {
@@ -496,7 +508,9 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	footerWidth, _ := textWidth(hdc, " · "+f.footer)
 	minimum := headerWidth + footerWidth
 	if f.expanded {
+		selectObject.Call(hdc, overlay.bold)
 		wholeWidth, _ := textWidth(hdc, f.whole)
+		selectObject.Call(hdc, overlay.font)
 		minimum = max(minimum, wholeWidth)
 	}
 	if content < minimum {
@@ -511,7 +525,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 func overlaySnapshot() overlayFrame {
 	overlay.mu.Lock()
 	defer overlay.mu.Unlock()
-	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel}
+	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn}
 	if f.expanded {
 		f.lines = overlay.detail
 	}
@@ -557,6 +571,16 @@ func overlayRender(hwnd uintptr) {
 	gdiFlush.Call()
 	composeOverlay(colour, mask, int(l.width), int(l.height), int(overlay.px(6)), bgPixel, bgAlpha)
 	composeBorder(colour, int(l.width), int(l.height), int(overlay.px(6)), borderPixel, borderAlpha, int(l.pad), int(l.pad+l.headerBase+overlay.px(3)), int(overlay.px(1)))
+	width, height, pad, thin := int(l.width), int(l.height), int(l.pad), int(overlay.px(1))
+	if f.limit > 0 {
+		barY := int(l.pad + l.headerBase + overlay.px(3) + overlay.px(4))
+		barWidth := width - pad*2
+		composeBar(colour, width, height, pad, barY, barWidth, int(l.barHeight), barFill(f.used, f.limit, barWidth), borderPixel, barPixels[f.warnLevel])
+	}
+	if f.expanded {
+		// a rule under the column names
+		composeRule(colour, width, height, pad, width-pad, int(l.pad+l.headerHeight+l.rowHeight)-thin-1, thin, borderPixel)
+	}
 
 	if !overlayPlaced {
 		overlayPlaced = true
@@ -677,6 +701,7 @@ func overlayDraw(hdc uintptr, l overlayLayout, f overlayFrame, asMask bool) {
 		})
 	}
 	if f.expanded {
-		drawText(hdc, l.pad, y+l.rowHeight, f.whole, paint(mutedColor))
+		selectObject.Call(hdc, overlay.bold)
+		drawText(hdc, l.pad, y+l.rowHeight, f.whole, paint(textColor))
 	}
 }

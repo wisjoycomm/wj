@@ -19,6 +19,31 @@ func TestComposeOverlayKeepsTextOpaqueOverSeeThroughBackground(t *testing.T) {
 	}
 }
 
+func TestBarFill(t *testing.T) {
+	cases := []struct {
+		total, limit int64
+		want         int
+	}{{0, 100, 0}, {50, 100, 50}, {100, 100, 100}, {250, 100, 100}, {10, 0, 0}}
+	for _, c := range cases {
+		if got := barFill(c.total, c.limit, 100); got != c.want {
+			t.Errorf("barFill(%d,%d) = %d, want %d", c.total, c.limit, got, c.want)
+		}
+	}
+}
+
+func TestComposeBarAndRule(t *testing.T) {
+	pix := make([]byte, 4*4*2)
+	composeBar(pix, 4, 2, 0, 0, 4, 1, 2, [3]byte{1, 1, 1}, [3]byte{9, 9, 9})
+	if pix[0] != 9 || pix[4*2] != 1 || pix[3] != 255 {
+		t.Errorf("bar row = %v", pix[:16])
+	}
+	composeRule(pix, 4, 2, 1, 3, 1, 1, [3]byte{5, 5, 5})
+	if pix[16] != 0 || pix[20] != 5 || pix[28] != 0 {
+		t.Errorf("rule row = %v", pix[16:])
+	}
+	composeRule(pix, 4, 2, -5, 99, 7, 1, [3]byte{5, 5, 5}) // off image: no panic
+}
+
 func TestComposeBorderMarksEdgeAndRule(t *testing.T) {
 	const w, h = 10, 8
 	pix := make([]byte, w*h*4)

@@ -53,6 +53,39 @@ func composeBorder(pix []byte, width, height, radius int, border [3]byte, border
 	}
 }
 
+// fillRect paints an opaque rectangle [x0,x1) x [y0,y1) of premultiplied BGRA pixels,
+// clipped to the image.
+func fillRect(pix []byte, width, height, x0, y0, x1, y1 int, colour [3]byte) {
+	for y := max(y0, 0); y < min(y1, height); y++ {
+		for x := max(x0, 0); x < min(x1, width); x++ {
+			i := (y*width + x) * 4
+			pix[i], pix[i+1], pix[i+2], pix[i+3] = colour[0], colour[1], colour[2], 255
+		}
+	}
+}
+
+// composeRule draws a horizontal rule from x0 to x1 at row y.
+func composeRule(pix []byte, width, height, x0, x1, y, thickness int, colour [3]byte) {
+	fillRect(pix, width, height, x0, y, x1, y+max(thickness, 1), colour)
+}
+
+// barFill is how many of the barWidth pixels a share of the limit fills, 0 to barWidth.
+func barFill(total, limit int64, barWidth int) int {
+	if limit <= 0 || total <= 0 {
+		return 0
+	}
+	if total >= limit {
+		return barWidth
+	}
+	return int(float64(barWidth) * float64(total) / float64(limit))
+}
+
+// composeBar draws a usage bar: a track, then the filled part on top of it.
+func composeBar(pix []byte, width, height, x, y, barWidth, barHeight, fill int, track, filled [3]byte) {
+	fillRect(pix, width, height, x, y, x+barWidth, y+barHeight, track)
+	fillRect(pix, width, height, x, y, x+fill, y+barHeight, filled)
+}
+
 // cornerCoverage is how much of a pixel lies inside the rounded rectangle.
 func cornerCoverage(x, y, width, height, radius int) float64 {
 	dx := cornerDistance(x, width, radius)
