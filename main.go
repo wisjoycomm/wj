@@ -13,6 +13,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -23,6 +24,10 @@ func main() {
 	migrateLegacy(os.Args[1:], os.Stderr)
 	err := runApp(os.Args[1:], os.Stdin, os.Stdout)
 	restore()
+	var code exitError
+	if errors.As(err, &code) {
+		os.Exit(int(code))
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "wj:", err)
 		os.Exit(1)

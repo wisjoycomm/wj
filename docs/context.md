@@ -194,7 +194,7 @@ Ba phương án đã cân nhắc:
 Kế hoạch: dùng B vài ngày. Nếu chất lượng không giảm thì chuyển A, chỉ cần đổi `300000` thành `200000`.
 
 Cách đo chất lượng, so với số liệu 2026-11-09:
-- `fast_verify` có pass ngay lần đầu không.
+- `wj verify` có pass ngay lần đầu không.
 - Số commit `fix(...)` phải làm thêm sau mỗi task.
 - Số vấn đề review tìm ra.
 - Token mỗi task.
@@ -211,7 +211,7 @@ Cách đo chất lượng, so với số liệu 2026-11-09:
 - Với settings.json, `wj init` chỉ thêm quyền từ kit vào file có sẵn.
 
 Chưa đưa vào kit của `wj init`. Muốn mọi project mới đều có thì thêm vào `kit/base/` (`AGENTS.md`,
-`.claude/settings.json`) sau khi thấy hiệu quả ở endlesswinter.
+`dot-claude/settings.json`) sau khi thấy hiệu quả ở endlesswinter.
 
 Lưu ý: `.claude/settings.json` của endlesswinter được git theo dõi. Worker chạy thành phiên Claude riêng trong
 worktree chỉ có cấu hình này sau khi nó được commit vào nhánh mà worktree tạo ra từ đó. Subagent trong cùng phiên

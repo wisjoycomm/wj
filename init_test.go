@@ -43,12 +43,23 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 	for _, rel := range []string{
 		"CLAUDE.md", "PLAN.md", "PLAN-ARCHIVE.md", ".claude/settings.json",
 		".claude/skills/orca-orchestrator/SKILL.md",
-		".claude/skills/orca-stateless-worker/scripts/fast_verify.ps1",
-		".agents/skills/orca-orchestrator/scripts/plan.ps1",
-		".agents/skills/orca-stateless-worker/SKILL.md",
+		".claude/skills/orca-dream/SKILL.md",
+		".claude/agents/orca-worker.md",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
 			t.Errorf("%s missing", rel)
+		}
+	}
+	for _, rel := range []string{".agents", "dot-claude", ".claude/skills/orca-orchestrator/scripts", ".claude/skills/orca-stateless-worker"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			t.Errorf("%s must not be installed", rel)
+		}
+	}
+	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
+	for _, want := range []string{"Bash(wj verify *)", "Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
+		"CLAUDE_CODE_GLOB_NO_IGNORE", `"baseRef": "head"`} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("settings.json lacks %q", want)
 		}
 	}
 	agents := readText(t, filepath.Join(root, "AGENTS.md"))
@@ -61,7 +72,7 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 		t.Error("web rules were not chosen")
 	}
 	ignore := readText(t, filepath.Join(root, ".gitignore"))
-	if !strings.Contains(ignore, ".tmp/") || !strings.Contains(ignore, "/[Ll]ibrary/") {
+	if !strings.Contains(ignore, ".tmp/") || !strings.Contains(ignore, "/[Ll]ibrary/") || !strings.Contains(ignore, ".claude/worktrees/") {
 		t.Errorf("gitignore = %q", ignore)
 	}
 }
@@ -140,6 +151,109 @@ func TestInitNeverOverwritesUserFiles(t *testing.T) {
 	}
 	if containsName(doc.Permissions.Allow, "Bash(npm install)") {
 		t.Error("user's deny rule was loosened")
+	}
+}
+
+// The kit's skills must work with nothing but wj: no script files, no pwsh,
+// and no search tools the built-in ones replace.
+func TestKitSkillsCallOnlyWj(t *testing.T) {
+	for _, rel := range orcaSkillFiles {
+		data, err := kitFS.ReadFile(kitSource(rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, unwanted := range []string{"pwsh", ".ps1", "scripts/", ".agents", "rg -n", "bat -p"} {
+			if strings.Contains(string(data), unwanted) {
+				t.Errorf("%s mentions %q", rel, unwanted)
+			}
+		}
+	}
+	for _, rel := range []string{"AGENTS.md", "CLAUDE.md"} {
+		data, err := kitFS.ReadFile(kitBase + "/" + rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "## Shell tools") || strings.Contains(string(data), "shell table") {
+			t.Errorf("%s still carries the shell tools table", rel)
+		}
+	}
+}
+
+func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
+	root := t.TempDir()
+	skill := filepath.Join(root, ".claude", "skills", "orca-orchestrator", "SKILL.md")
+	oldWorker := filepath.Join(root, ".claude", "skills", "orca-stateless-worker")
+	script := filepath.Join(oldWorker, "scripts", "fast_verify.ps1")
+	writeTestFile(t, skill, "old skill printing launch commands")
+	writeTestFile(t, filepath.Join(oldWorker, "SKILL.md"), "old worker skill calling fast_verify.ps1")
+	writeTestFile(t, script, "old script")
+	writeTestFile(t, filepath.Join(root, "CLAUDE.md"), "mine")
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.json"), `{"env":{"MINE":"1","CLAUDE_CODE_GLOB_NO_IGNORE":"true"}}`)
+
+	output := runInitIn(t, root)
+	if readText(t, skill) != "old skill printing launch commands" || !strings.Contains(output, "wj init -update") {
+		t.Fatalf("a plain rerun must keep the old skill and say how to update:\n%s", output)
+	}
+	if _, err := os.Stat(script); err != nil {
+		t.Fatal("a plain rerun must keep what the old skills call")
+	}
+
+	runInitIn(t, root, "-update")
+	if !strings.Contains(readText(t, skill), "orca-worker") {
+		t.Error("skill not replaced by the kit's")
+	}
+	if backups, _ := filepath.Glob(skill + ".bak-*"); len(backups) != 1 {
+		t.Errorf("want one backup of the old skill, got %d", len(backups))
+	}
+	if _, err := os.Stat(oldWorker); err == nil {
+		t.Error("the old worker skill, its script and their folders must be removed")
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
+		t.Error("the worker subagent must be installed")
+	}
+	if readText(t, filepath.Join(root, "CLAUDE.md")) != "mine" {
+		t.Error("-update must not touch CLAUDE.md")
+	}
+	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
+	if !strings.Contains(settings, `"MINE": "1"`) || !strings.Contains(settings, `"CLAUDE_CODE_GLOB_NO_IGNORE": "true"`) {
+		t.Errorf("the user's env values must stay:\n%s", settings)
+	}
+}
+
+func TestInitKeepsClaudeMemoryInsideTheProject(t *testing.T) {
+	root := t.TempDir()
+	runInitIn(t, root)
+	local := filepath.Join(root, ".claude", "settings.local.json")
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(readText(t, local)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, ".claude", "memory"); doc["autoMemoryDirectory"] != want {
+		t.Errorf("autoMemoryDirectory = %v, want %s", doc["autoMemoryDirectory"], want)
+	}
+	ignore := readText(t, filepath.Join(root, ".gitignore"))
+	for _, want := range []string{".claude/memory/", ".claude/settings.local.json", "CLAUDE.local.md"} {
+		if !strings.Contains(ignore, want) {
+			t.Errorf("%s must be gitignored: memory is local", want)
+		}
+	}
+
+	// A worktree points at the main checkout's folder, so the repo has one memory.
+	worktree := filepath.Join(t.TempDir(), "wt")
+	writeTestFile(t, filepath.Join(worktree, ".git"), "gitdir: "+filepath.ToSlash(root)+"/.git/worktrees/wt\n")
+	runInitIn(t, worktree)
+	if err := json.Unmarshal([]byte(readText(t, filepath.Join(worktree, ".claude", "settings.local.json"))), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, ".claude", "memory"); doc["autoMemoryDirectory"] != want {
+		t.Errorf("worktree autoMemoryDirectory = %v, want the main checkout's %s", doc["autoMemoryDirectory"], want)
+	}
+
+	// The user's own choice and other local settings stay.
+	writeTestFile(t, local, `{"autoMemoryDirectory":"~/elsewhere","env":{"A":"1"}}`)
+	runInitIn(t, root)
+	if got := readText(t, local); got != `{"autoMemoryDirectory":"~/elsewhere","env":{"A":"1"}}` {
+		t.Errorf("settings.local.json was rewritten: %s", got)
 	}
 }
 
@@ -225,5 +339,39 @@ func TestInitUsesGitRootFromSubfolder(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(sub, "AGENTS.md")); err == nil {
 		t.Error("AGENTS.md should not be in the subfolder")
+	}
+}
+
+func TestAddToWjBlock(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", "# wj init\na\n"},
+		{"x", "x\n\n# wj init\na\n"},
+		{"x\n\n# wj init\n.tmp/\n\n# mine\ny\n", "x\n\n# wj init\n.tmp/\na\n\n# mine\ny\n"},
+		{"x\r\n\r\n# wj init\r\n.tmp/\r\n", "x\r\n\r\n# wj init\r\n.tmp/\r\na\r\n"},
+	}
+	for _, c := range cases {
+		if got := addToWjBlock(c.in, []string{"a"}); got != c.want {
+			t.Errorf("addToWjBlock(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestInitWritesKitVersion(t *testing.T) {
+	old := buildVersion
+	buildVersion = "0.2.3\n"
+	t.Cleanup(func() { buildVersion = old })
+	root := t.TempDir()
+	runInitIn(t, root, "-type", "go")
+	path := filepath.Join(root, ".claude", "wj-kit")
+	if got := readText(t, path); got != "0.2.3\n" {
+		t.Fatalf("wj-kit = %q", got)
+	}
+	buildVersion = "0.2.4"
+	if out := runInitIn(t, root, "-type", "go"); !strings.Contains(out, "wj init -update") || readText(t, path) != "0.2.3\n" {
+		t.Errorf("version changed without -update:\n%s", out)
+	}
+	runInitIn(t, root, "-type", "go", "-update")
+	if got := readText(t, path); got != "0.2.4\n" {
+		t.Errorf("wj-kit after -update = %q", got)
 	}
 }
