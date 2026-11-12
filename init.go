@@ -561,7 +561,15 @@ func mergeSettings(doc, kit map[string]any) bool {
 			}
 			continue
 		}
-		current, _ := target[key].([]any)
+		current, isList := target[key].([]any)
+		if had, exists := target[key]; exists && !isList {
+			if had != nil {
+				continue // not a list: the user's value, leave it
+			}
+			// null fails Claude Code's settings check; older wj versions wrote it.
+			current = []any{}
+			added = true
+		}
 		for _, rule := range rules {
 			name, _ := rule.(string)
 			if !existing[name] {
@@ -570,7 +578,11 @@ func mergeSettings(doc, kit map[string]any) bool {
 				added = true
 			}
 		}
-		target[key] = current
+		// Every kit rule can already sit in another list: don't create the
+		// list then, a nil one is written as null.
+		if current != nil {
+			target[key] = current
+		}
 	}
 	return added
 }

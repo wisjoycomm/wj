@@ -465,3 +465,34 @@ func TestInitWritesKitVersion(t *testing.T) {
 		t.Errorf("wj-kit after -update = %q", got)
 	}
 }
+
+// A kit rule the user already has in another list must not leave an empty
+// list behind: a nil one is written as null, which Claude Code rejects.
+func TestMergeSettingsNeverWritesNullList(t *testing.T) {
+	parse := func(text string) map[string]any {
+		t.Helper()
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(text), &doc); err != nil {
+			t.Fatalf("parse %s: %v", text, err)
+		}
+		return doc
+	}
+	kit := `{"permissions":{"ask":["Bash(git add *)"]}}`
+
+	doc := parse(`{"permissions":{"allow":["Bash(git add *)"]}}`)
+	if mergeSettings(doc, parse(kit)) {
+		t.Error("nothing to add, but mergeSettings reported a change")
+	}
+	if out, _ := json.Marshal(doc); strings.Contains(string(out), "null") || strings.Contains(string(out), `"ask"`) {
+		t.Errorf("ask list must not be created: %s", out)
+	}
+
+	// A file an older wj already broke is repaired.
+	doc = parse(`{"permissions":{"allow":["Bash(git add *)"],"ask":null}}`)
+	if !mergeSettings(doc, parse(kit)) {
+		t.Error("repairing a null list must count as a change")
+	}
+	if out, _ := json.Marshal(doc); !strings.Contains(string(out), `"ask":[]`) {
+		t.Errorf("null ask list must become []: %s", out)
+	}
+}
