@@ -9,6 +9,9 @@ wj init -type unity,web    chọn job
 wj init -dry-run           xem trước
 wj init -update            project cài bằng kit cũ: lấy skill Orca mới
 wj init -lite              chỉ phần không cần wj (xem "Hai mức" bên dưới)
+wj init -remove            gỡ kit: chỉ phần của wj (khối wj trong AGENTS.md, file giống bản kit,
+                           hook wj guard, quyền Orca); file bạn đã sửa giữ nguyên, file gỡ vào
+                           thùng rác. Thêm -dry-run để chỉ xem danh sách
 ```
 
 Job có sẵn: `unity`, `web`, `go`, `python`.
@@ -300,6 +303,9 @@ Lệnh tìm:
 - MCP cài cho mọi project nhưng chỉ vài project dùng trong 30 ngày. Sửa: chuyển về đúng các
   project đó bằng chính lệnh `claude mcp`, không gọi được thì bỏ khỏi phạm vi chung.
 - `PLAN.md` kiểu cũ hoặc sai format.
+- Bản sao lưu chương trình `.old-*` còn sót sau các lần `wj update`. Sửa: chuyển vào thùng rác.
+- Project đã cài kit mà thiếu `autoMemoryDirectory` (memory không nằm trong project). Sửa: ghi lại
+  vào `.claude/settings.local.json`.
 - Kit của project đang đứng thiếu hoặc cũ hơn `wj` này. Lệnh chạy thử `wj init` (không ghi gì) và liệt kê thứ
   init sẽ thêm: hook `wj guard`, file cấm đọc, giới hạn output Bash, khối rule. Sửa: `wj init`. Project cài bản
   lite thì chỉ so với bản lite. Project có `CLAUDE.md` hay `AGENTS.md` mà chưa cài kit thì chỉ được nhắc.

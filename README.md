@@ -78,6 +78,8 @@ wj init                  ask which job this is (detected ones are suggested)
 wj init -type unity,web  choose directly
 wj init -dry-run         preview, write nothing
 wj init -update          project set up by an older kit: take the current Orca skills
+wj init -remove          take the kit out: only what wj owns, your edits stay; removed
+                         files go to the recycle bin. With -dry-run it only lists
 ```
 
 Run it anywhere inside a project; it works from the Git root. The kit targets Claude
@@ -134,8 +136,9 @@ project's Orca skills (the old files are backed up). See [docs/project.md](docs/
 
 `wj doctor` checks the machine and offers to fix what it finds: Claude sessions that
 lost tool search mid-session (gateway `tool_reference` bug), an outdated or stopped
-metering proxy, user-scope MCP servers that only one or two projects use, and old
-or broken `PLAN.md` files. `-dry-run` only reports, `-yes` fixes everything, and
+metering proxy, user-scope MCP servers that only one or two projects use, old
+or broken `PLAN.md` files, leftover `.old-*` program backups from past updates, and a
+kit project without `autoMemoryDirectory`. `-dry-run` only reports, `-yes` fixes everything, and
 `-ai` asks the configured Claude gateway for advice on the report (only the report
 lines are sent). `wj proxy bg|stop|restart` manages a background proxy.
 
