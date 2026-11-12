@@ -84,11 +84,15 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
 	update := flags.Bool("update", false, "thay skill Orca cũ trong project bằng bản của kit (bản cũ sao lưu .bak)")
 	lite := flags.Bool("lite", false, "chỉ cài phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook)")
+	remove := flags.Bool("remove", false, "gỡ kit khỏi project: chỉ phần của wj, file bạn đã sửa giữ nguyên (vào thùng rác)")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() > 1 {
-		return errors.New("cách dùng: wj init [-type unity,web] [-lite] [-update] [-dry-run] [thư mục]")
+		return errors.New("cách dùng: wj init [-type unity,web] [-lite] [-update] [-remove] [-dry-run] [thư mục]")
+	}
+	if *remove && (*types != "" || *update || *lite) {
+		return errors.New("-remove không đi cùng -type, -update hay -lite")
 	}
 	dir := "."
 	if flags.NArg() == 1 {
@@ -102,6 +106,9 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 		return fmt.Errorf("không có thư mục %s", abs)
 	}
 	root := projectRoot(abs)
+	if *remove {
+		return runInitRemove(root, *dry, out)
+	}
 	stacks, err := chooseStacks(*types, root, input, out)
 	if err != nil {
 		return err
