@@ -27,41 +27,42 @@ const (
 	overlayClass   = "WjTokenOverlay"
 	overlayRefresh = 5 * time.Second
 
-	wmDestroy         = 0x0002
-	wmClose           = 0x0010
-	wmLButtonDown     = 0x0201
-	wmLButtonDblClk   = 0x0203
-	smXVirtualScreen  = 76
-	smCXVirtualScreen = 78
-	menuToggle        = 2
-	wmRButtonUp       = 0x0205
-	wmExitSizeMove    = 0x0232
-	wmSnapshot        = 0x8001
-	wmSysCommand      = 0x0112
-	scDragMove        = 0xF012
-	csDblClks         = 0x0008
-	wsPopup           = 0x80000000
-	wsExTopmost       = 0x00000008
-	wsExToolWindow    = 0x00000080
-	wsExLayered       = 0x00080000
-	wsExNoActivate    = 0x08000000
-	ulwAlpha          = 2
-	acSrcAlpha        = 1
-	swShowNoActive    = 4
-	swpNoActivate     = 0x0010
-	swpNoZOrder       = 0x0004
-	swpNoMove         = 0x0002
-	tpmReturnCmd      = 0x0100
-	menuClose         = 1
-	logPixelsY        = 90
-	bgAlpha           = 235 // background only (0-255); text is always fully opaque
-	borderAlpha       = 255
-	textColor         = 0xFFFFFF
-	mutedColor        = 0xD8D2CC
-	activeColor       = 0x80DE4A
-	warnColor         = 0x3CC8FF
-	overColor         = 0x6060FF
-	detachedProcess   = 0x00000008
+	wmDestroy       = 0x0002
+	wmClose         = 0x0010
+	wmLButtonDown   = 0x0201
+	wmLButtonDblClk = 0x0203
+	menuToggle      = 2
+	wmRButtonUp     = 0x0205
+	wmEnterSizeMove = 0x0231
+	wmExitSizeMove  = 0x0232
+	wmDpiChanged    = 0x02E0
+	monitorNearest  = 2
+	wmSnapshot      = 0x8001
+	wmSysCommand    = 0x0112
+	scDragMove      = 0xF012
+	csDblClks       = 0x0008
+	wsPopup         = 0x80000000
+	wsExTopmost     = 0x00000008
+	wsExToolWindow  = 0x00000080
+	wsExLayered     = 0x00080000
+	wsExNoActivate  = 0x08000000
+	ulwAlpha        = 2
+	acSrcAlpha      = 1
+	swShowNoActive  = 4
+	swpNoActivate   = 0x0010
+	swpNoZOrder     = 0x0004
+	swpNoMove       = 0x0002
+	tpmReturnCmd    = 0x0100
+	menuClose       = 1
+	logPixelsY      = 90
+	bgAlpha         = 235 // background only (0-255); text is always fully opaque
+	borderAlpha     = 255
+	textColor       = 0xFFFFFF
+	mutedColor      = 0xD8D2CC
+	activeColor     = 0x80DE4A
+	warnColor       = 0x3CC8FF
+	overColor       = 0x6060FF
+	detachedProcess = 0x00000008
 )
 
 var bgPixel = [3]byte{0x1D, 0x18, 0x16}     // blue, green, red
@@ -77,6 +78,8 @@ var (
 
 	getModuleHandle     = kernel32.NewProc("GetModuleHandleW")
 	setProcessDPIAware  = user32.NewProc("SetProcessDPIAware")
+	setDPIContext       = user32.NewProc("SetProcessDpiAwarenessContext") // Windows 10 1703+
+	getDpiForWindow     = user32.NewProc("GetDpiForWindow")               // Windows 10 1607+
 	registerClassEx     = user32.NewProc("RegisterClassExW")
 	createWindowEx      = user32.NewProc("CreateWindowExW")
 	defWindowProc       = user32.NewProc("DefWindowProcW")
@@ -211,6 +214,7 @@ type overlayView struct {
 	big        uintptr // bold, larger: the total
 	scale      float64
 	statePath  string
+	moving     bool // inside a drag: don't pull the window back into the work area yet
 }
 
 var overlay overlayView
@@ -273,7 +277,7 @@ func overlayLoop(window time.Duration, home string) error {
 	runtime.LockOSThread()
 	overlay.statePath = filepath.Join(stateDir(home), "overlay.json")
 	overlay.title = windowTag(window)
-	setProcessDPIAware.Call()
+	overlayDPIAware()
 	instance, _, _ := getModuleHandle.Call(0)
 	class, _ := windows.UTF16PtrFromString(overlayClass)
 	cursor, _, _ := loadCursor.Call(0, 32512)
@@ -288,13 +292,7 @@ func overlayLoop(window time.Duration, home string) error {
 		return fmt.Errorf("không tạo được cửa sổ: %w", err)
 	}
 	overlay.hwnd = hwnd
-	hdc, _, _ := getDC.Call(hwnd)
-	dpi, _, _ := getDeviceCaps.Call(hdc, logPixelsY)
-	releaseDC.Call(hwnd, hdc)
-	overlay.scale = float64(dpi) / 96
-	overlay.font = overlayFont(10, 400, dpi)
-	overlay.bold = overlayFont(10, 600, dpi)
-	overlay.big = overlayFont(13, 700, dpi)
+	overlaySetDPI(overlayWindowDPI(hwnd))
 
 	go overlayFeed(window, home, hwnd)
 
@@ -307,6 +305,47 @@ func overlayLoop(window time.Duration, home string) error {
 		translateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		dispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
+}
+
+// overlayDPIAware asks for per-monitor DPI (v2), so Windows sends WM_DPICHANGED instead of
+// stretching the bitmap on a monitor with another scale. Older Windows: system DPI only.
+func overlayDPIAware() {
+	if setDPIContext.Find() == nil {
+		const perMonitorV2 = ^uintptr(3) // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+		if ok, _, _ := setDPIContext.Call(perMonitorV2); ok != 0 {
+			return
+		}
+	}
+	setProcessDPIAware.Call()
+}
+
+// overlayWindowDPI is the DPI of the monitor the window is on.
+func overlayWindowDPI(hwnd uintptr) uintptr {
+	if getDpiForWindow.Find() == nil {
+		if dpi, _, _ := getDpiForWindow.Call(hwnd); dpi != 0 {
+			return dpi
+		}
+	}
+	hdc, _, _ := getDC.Call(hwnd)
+	dpi, _, _ := getDeviceCaps.Call(hdc, logPixelsY)
+	releaseDC.Call(hwnd, hdc)
+	if dpi == 0 {
+		dpi = 96
+	}
+	return dpi
+}
+
+// overlaySetDPI sets the scale and rebuilds the fonts for dpi. Only the window thread calls it.
+func overlaySetDPI(dpi uintptr) {
+	for _, font := range []uintptr{overlay.font, overlay.bold, overlay.big} {
+		if font != 0 {
+			deleteObject.Call(font)
+		}
+	}
+	overlay.scale = float64(dpi) / 96
+	overlay.font = overlayFont(10, 400, dpi)
+	overlay.bold = overlayFont(10, 600, dpi)
+	overlay.big = overlayFont(13, 700, dpi)
 }
 
 func overlayFont(points, weight int, dpi uintptr) uintptr {
@@ -403,8 +442,22 @@ func overlayProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	case wmRButtonUp:
 		overlayMenu(hwnd)
 		return 0
+	case wmEnterSizeMove:
+		overlay.moving = true
+		return 0
 	case wmExitSizeMove:
+		overlay.moving = false
+		overlayRender(hwnd) // pulls a window dropped half off the monitor back in
 		overlaySavePosition(hwnd)
+		return 0
+	case wmDpiChanged:
+		// Moved to a monitor with another scale: new fonts, and Windows' suggested spot.
+		overlaySetDPI(wParam & 0xFFFF)
+		suggested := (*winRect)(unsafe.Add(nil, lParam)) // lParam points at a RECT Windows owns
+		setWindowPos.Call(hwnd, 0, uintptr(suggested.Left), uintptr(suggested.Top),
+			uintptr(suggested.Right-suggested.Left), uintptr(suggested.Bottom-suggested.Top), swpNoZOrder|swpNoActivate)
+		// Posted, not drawn here: this can arrive inside overlayRender's own SetWindowPos.
+		postMessage.Call(hwnd, wmSnapshot, 0, 0)
 		return 0
 	case wmDestroy:
 		postQuitMessage.Call(0)
@@ -592,25 +645,48 @@ func overlayRender(hwnd uintptr) {
 	var source winPoint
 	blend := [4]byte{0, 0, 255, acSrcAlpha}
 	var moveTo *winPoint // nil keeps the window where it is
-	if position, moved := overlayKeepOnScreen(hwnd, l.width); moved {
+	if position, moved := overlayKeepOnScreen(hwnd, l.width, l.height); moved {
 		moveTo = &position
 	}
 	updateLayeredWindow.Call(hwnd, screen, uintptr(unsafe.Pointer(moveTo)), uintptr(unsafe.Pointer(&size)), hdc, uintptr(unsafe.Pointer(&source)), 0, uintptr(unsafe.Pointer(&blend)), ulwAlpha)
 	selectObject.Call(hdc, previous)
 }
 
-// overlayKeepOnScreen holds the right edge still when a window on the right side of
-// the screen changes width, so expanding it never runs off the screen.
-func overlayKeepOnScreen(hwnd uintptr, width int32) (winPoint, bool) {
+// overlayKeepOnScreen keeps the window inside the work area of the monitor it is on
+// (taskbar excluded), on both axes. Not during a drag: the user may be crossing monitors.
+func overlayKeepOnScreen(hwnd uintptr, width, height int32) (winPoint, bool) {
 	var rect winRect
 	getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-	left, _, _ := getSystemMetrics.Call(smXVirtualScreen)
-	span, _, _ := getSystemMetrics.Call(smCXVirtualScreen)
-	middle := int32(left) + int32(span)/2
-	if rect.Right-rect.Left == width || (rect.Left+rect.Right)/2 <= middle {
+	if overlay.moving {
 		return winPoint{}, false
 	}
-	return winPoint{rect.Right - width, rect.Top}, true
+	monitor, _, _ := monitorFromRect.Call(uintptr(unsafe.Pointer(&rect)), monitorNearest)
+	var info winMonitorInfo
+	info.Size = uint32(unsafe.Sizeof(info))
+	if monitor == 0 {
+		return winPoint{}, false
+	}
+	if ok, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info))); ok == 0 || info.Work.Right <= info.Work.Left {
+		return winPoint{}, false
+	}
+	at := overlayFit(rect, info.Work, width, height)
+	return at, at.X != rect.Left || at.Y != rect.Top
+}
+
+// overlayFit places a window that was at rect and is now width x height inside work.
+// On the right half of the monitor it grows to the left, on the bottom half it grows up,
+// so expanding never runs off the edge. Too big for the work area: its top left stays in.
+func overlayFit(rect, work winRect, width, height int32) winPoint {
+	x, y := rect.Left, rect.Top
+	if rect.Right-rect.Left != width && rect.Left+rect.Right > work.Left+work.Right {
+		x = rect.Right - width
+	}
+	if rect.Bottom-rect.Top != height && rect.Top+rect.Bottom > work.Top+work.Bottom {
+		y = rect.Bottom - height
+	}
+	x = max(min(x, work.Right-width), work.Left)
+	y = max(min(y, work.Bottom-height), work.Top)
+	return winPoint{x, y}
 }
 
 // overlayStartPosition restores the last spot if that monitor is still there.
