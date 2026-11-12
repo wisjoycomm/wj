@@ -161,6 +161,51 @@ qua. Giao task nhỏ trước. Đã thử (Claude Code 2.1.322, 2026-11-12): sub
 dòng `claude`; task `codex` / `agy` nó để `TODO` và liệt kê ra để bạn chạy trong app đó. Dòng task, Scope và Verify
 giống nhau cho mọi agent.
 
+### Unity: chung checkout
+
+Mỗi worktree là một bản checkout đủ `Assets/` và không có `Library/`, nên với Unity mỗi task sẽ phải import lại cả
+project. Vì vậy project có job `unity` không dùng worktree: mọi worker làm ngay trong checkout chính, và chỉ có
+một Unity Editor (bản bạn đang mở) cho mọi việc cần Editor. Project không có job `unity` giữ nguyên worktree.
+
+**Cài.** `wj init` với job `unity` (kể cả `-type unity,web`) cài `.claude/agents/orca-worker.md` từ
+`kit/stacks/unity/dot-claude/agents/orca-worker.md` thay cho bản chung của Orca. Bản Unity không có dòng
+`isolation: worktree` và không có dòng `tools:`, để worker dùng được MCP server đang kết nối. `-update`, `-remove`,
+`-dry-run` và mục kit của `wj doctor` so với đúng bản đã cài cho job đó. Bản lite không cài worker.
+
+**Worker Unity.** Nhiều worker cùng sửa một checkout, mỗi worker một Scope không trùng file:
+
+- Chỉ đụng file trong Scope (và `.meta` đi kèm). File khác đang đổi là của worker khác: không sửa, không hoàn tác.
+- Commit đúng file của mình: `git add -- <file trong Scope>` rồi `git commit -m "<ID>: ..." -- <các file đó>`,
+  không dùng `git add -A`. Gặp lỗi `index.lock` thì chờ vài giây và thử lại, tối đa 3 lần. Không stash, reset,
+  checkout hay đổi nhánh.
+- Task script (chỉ `.cs`, `.asmdef`...): sửa file, không mở Unity, không chạy batchmode, rồi chạy `wj verify <ID>`.
+- Task cần Editor (scene, prefab, uGUI, asset, chạy test): chỉ làm qua tool của Unity MCP server đang kết nối,
+  không sửa YAML bằng tay. Không có server nào kết nối thì báo BLOCKED `Unity MCP not connected`. Trước khi sửa:
+  refresh asset và đọc console; có lỗi biên dịch thì báo BLOCKED kèm tên file và dòng lỗi, không tự sửa file ngoài
+  Scope. Sau khi sửa: lưu scene/prefab qua MCP, đọc lại console, chụp Game view nếu server có tool chụp.
+- Dòng handover giữ nguyên dạng `TASK: ... | STATUS: ... | FILES: ... | SUMMARY: ...`.
+
+**`wj verify` ngoài worktree** (thư mục `.git` của checkout trùng với thư mục git chung):
+
+- Chỉ xét file thay đổi nằm trong Scope của task. File đổi ngoài Scope và `PLAN.md` đang đổi không còn là lỗi
+  hay `WARN`, vì chúng thuộc worker khác và orchestrator. Không có file nào trong Scope thay đổi thì vẫn là
+  `NOT_VERIFIED` như cũ. Task không có Scope: giữ cách kiểm tra cũ.
+- Project Unity mà Editor đang mở (`Temp/UnityLockfile` tồn tại): không bật Unity batchmode. Verify là `-` thì
+  kết thúc bằng `VERIFY: PASS (scope only: Editor open, compile and tests not run)`; lệnh Verify ghi rõ thì vẫn chạy.
+- Project Unity mà Editor không mở: chạy batchmode như cũ, nhưng mỗi lúc một lần: giữ file khoá
+  `.tmp/unity-verify.lock` trong lúc chạy, lần khác chờ đến khi khoá nhả (khoá cũ hơn 30 phút coi như bỏ).
+- Trong worktree: không đổi gì.
+
+**Orchestrator.** Nhận ra chế độ này khi `.claude/agents/orca-worker.md` không có dòng `isolation: worktree`:
+
+- Task script chạy song song như thường. Task cần Editor (Scope có `*.unity`, `*.prefab`, `*.asset`, hoặc task là
+  chạy test / chỉnh UI) chạy mỗi lúc một task, và chỉ khi không còn task script nào `DOING`.
+- Ghi kết quả: ô Session là hash commit của task (`git log --format=%h -1 --grep "<ID>:"`), lệnh xem lại là
+  `git --no-pager show <hash>`.
+- Task cần Editor báo lỗi biên dịch ở một file: thêm một task `P0` sửa file đó (Scope là file đó), rồi chạy lại
+  task bị chặn sau khi task sửa xong.
+- `merge` không còn gì để gộp: chỉ archive (`wj plan archive T-01=<hash>`).
+
 ## Memory và dreaming
 
 Memory có ba chỗ. Chỗ nháp ở local, bản đã duyệt vào git:
