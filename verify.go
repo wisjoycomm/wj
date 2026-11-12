@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const verifyHelp = `KIỂM TRA MỘT TASK TRONG WORKTREE (cho worker Orca)
@@ -148,6 +149,13 @@ func (v *verifier) run(dir, id string) verdict {
 			lines = append(lines, line)
 		}
 	}
+	shared := id != "" && len(scope) > 0 && isSharedCheckout(v.root)
+	if shared {
+		lines = scopeLines(lines, scope)
+		if len(lines) == 0 {
+			return verifySkip("no changed file in the Scope of " + id)
+		}
+	}
 	if len(lines) == 0 {
 		return verifySkip("no changes in this worktree")
 	}
@@ -200,6 +208,16 @@ func (v *verifier) run(dir, id string) verdict {
 		return v.check(verify)
 	}
 	if isUnity {
+		if shared {
+			if has("Temp/UnityLockfile") {
+				return verdict{"PASS (scope only: Editor open, compile and tests not run)", 0}
+			}
+			release, err := acquireUnityLock(v.root)
+			if err != nil {
+				return verifySkip("cannot take .tmp/unity-verify.lock: " + err.Error())
+			}
+			defer release()
+		}
 		return v.unityCheck()
 	}
 	if isNode {
@@ -228,6 +246,59 @@ func (v *verifier) run(dir, id string) verdict {
 		return v.check("go test ./...")
 	}
 	return verifySkip("no Verify command in PLAN.md and no known stack (Unity / package.json / pytest / go)")
+}
+
+// isSharedCheckout is true outside a linked worktree: the checkout's git dir
+// is the common git dir, so other workers edit the same files.
+func isSharedCheckout(root string) bool {
+	gitDir, err1 := gitOutput(root, "rev-parse", "--absolute-git-dir")
+	common, err2 := gitOutput(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	clean := func(s string) string {
+		return strings.ToLower(filepath.Clean(filepath.FromSlash(strings.TrimSpace(s))))
+	}
+	return clean(gitDir) == clean(common)
+}
+
+// scopeLines keeps the status lines whose file is in Scope (PLAN.md never is
+// unless named).
+func scopeLines(lines, scope []string) []string {
+	var kept []string
+	for _, line := range lines {
+		paths := changedPaths([]string{line})
+		if len(paths) == 1 && inScope(paths[0], scope) {
+			kept = append(kept, line)
+		}
+	}
+	return kept
+}
+
+const unityLockStale = 30 * time.Minute
+
+// acquireUnityLock lets one batchmode run at a time in a shared checkout.
+func acquireUnityLock(root string) (func(), error) {
+	dir := filepath.Join(root, ".tmp")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, "unity-verify.lock")
+	for {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		if err == nil {
+			f.Close()
+			return func() { os.Remove(path) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		if info, err := os.Stat(path); err == nil && time.Since(info.ModTime()) > unityLockStale {
+			os.Remove(path)
+			continue
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func gitOutput(dir string, args ...string) (string, error) {

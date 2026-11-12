@@ -28,6 +28,45 @@ func verifyRepo(t *testing.T, scope, command string) string {
 	return root
 }
 
+// linkedWorktree adds a linked git worktree of main and returns its folder.
+func linkedWorktree(t *testing.T, main string) string {
+	t.Helper()
+	wt := filepath.Join(t.TempDir(), "wt")
+	cmd := exec.Command("git", "worktree", "add", "-q", "--detach", wt)
+	cmd.Dir = main
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v %s", err, out)
+	}
+	return wt
+}
+
+func TestVerifySharedCheckoutOnlyLooksAtScope(t *testing.T) {
+	root := verifyRepo(t, "`src/`", "`git --version`")
+	writeTestFile(t, filepath.Join(root, "other.txt"), "x")
+	plan := filepath.Join(root, "PLAN.md")
+	writeTestFile(t, plan, readText(t, plan)+"\n")
+	text, code := runVerifyTest(t, root, "T-01")
+	if code != 2 || !strings.Contains(verdictLine(text), "no changed file in the Scope of T-01") {
+		t.Fatalf("no file in Scope must be NOT_VERIFIED; got exit %d:\n%s", code, text)
+	}
+	writeTestFile(t, filepath.Join(root, "src", "a.go"), "package a")
+	text, code = runVerifyTest(t, root, "T-01")
+	if code != 0 || verdictLine(text) != "VERIFY: PASS" || strings.Contains(text, "WARN") || strings.Contains(text, "other.txt") {
+		t.Fatalf("want PASS without warnings about other workers' files; got exit %d:\n%s", code, text)
+	}
+}
+
+func TestVerifySharedUnityWithEditorOpenSkipsBatchmode(t *testing.T) {
+	root := verifyRepo(t, "`Assets/`", "-")
+	writeTestFile(t, filepath.Join(root, "ProjectSettings", "ProjectVersion.txt"), "m_EditorVersion: 1.0\n")
+	writeTestFile(t, filepath.Join(root, "Temp", "UnityLockfile"), "")
+	writeTestFile(t, filepath.Join(root, "Assets", "A.cs"), "class A {}")
+	text, code := runVerifyTest(t, root, "T-01")
+	if code != 0 || verdictLine(text) != "VERIFY: PASS (scope only: Editor open, compile and tests not run)" {
+		t.Fatalf("got exit %d:\n%s", code, text)
+	}
+}
+
 func runVerifyTest(t *testing.T, root string, args ...string) (string, int) {
 	t.Helper()
 	var out bytes.Buffer
@@ -45,7 +84,7 @@ func verdictLine(text string) string {
 }
 
 func TestVerifyRunsTheTaskCommandAndChecksScope(t *testing.T) {
-	root := verifyRepo(t, "`src/`", "`git --version`")
+	root := linkedWorktree(t, verifyRepo(t, "`src/`", "`git --version`"))
 	writeTestFile(t, filepath.Join(root, "src", "auth.go"), "package auth")
 	writeTestFile(t, filepath.Join(root, "other.txt"), "x")
 	writeTestFile(t, filepath.Join(root, ".tmp", "scratch.log"), "x")
