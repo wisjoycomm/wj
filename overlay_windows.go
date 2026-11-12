@@ -54,7 +54,8 @@ const (
 	tpmReturnCmd      = 0x0100
 	menuClose         = 1
 	logPixelsY        = 90
-	bgAlpha           = 150 // background only (0-255); text is always fully opaque
+	bgAlpha           = 235 // background only (0-255); text is always fully opaque
+	borderAlpha       = 255
 	textColor         = 0xFFFFFF
 	mutedColor        = 0xD8D2CC
 	activeColor       = 0x80DE4A
@@ -63,7 +64,8 @@ const (
 	detachedProcess   = 0x00000008
 )
 
-var bgPixel = [3]byte{0x1D, 0x18, 0x16} // blue, green, red
+var bgPixel = [3]byte{0x1D, 0x18, 0x16}     // blue, green, red
+var borderPixel = [3]byte{0x6A, 0x62, 0x5C} // blue, green, red
 
 var (
 	user32   = windows.NewLazySystemDLL("user32.dll")
@@ -201,6 +203,7 @@ type overlayView struct {
 	warnLevel  int
 	hwnd       uintptr
 	font, bold uintptr
+	big        uintptr // bold, larger: the total
 	scale      float64
 	statePath  string
 }
@@ -286,6 +289,7 @@ func overlayLoop(window time.Duration, home string) error {
 	overlay.scale = float64(dpi) / 96
 	overlay.font = overlayFont(10, 400, dpi)
 	overlay.bold = overlayFont(10, 600, dpi)
+	overlay.big = overlayFont(13, 700, dpi)
 
 	go overlayFeed(window, home, hwnd)
 
@@ -441,6 +445,7 @@ func drawText(hdc uintptr, x, y int32, text string, color uint32) {
 
 type overlayLayout struct {
 	pad, gap, rowHeight, dot int32
+	headerHeight, headerBase int32 // header block (with its rule) and its text height
 	columns                  []int32
 	width, height            int32
 }
@@ -463,7 +468,11 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 			}
 		}
 	}
-	rows := int32(len(f.lines)) + 1
+	selectObject.Call(hdc, overlay.big)
+	_, l.headerBase = textWidth(hdc, "Ag")
+	l.headerHeight = l.headerBase + overlay.px(7)
+	selectObject.Call(hdc, overlay.font)
+	rows := int32(len(f.lines))
 	if f.expanded {
 		measure(overlayDetailHeading)
 		rows += 2 // column names and the machine totals
@@ -479,7 +488,10 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 		content += width
 	}
 	selectObject.Call(hdc, overlay.bold)
-	headerWidth, _ := textWidth(hdc, f.title+" "+f.total)
+	titleWidth, _ := textWidth(hdc, f.title+" ")
+	selectObject.Call(hdc, overlay.big)
+	totalWidth, _ := textWidth(hdc, f.total)
+	headerWidth := titleWidth + totalWidth
 	selectObject.Call(hdc, overlay.font)
 	footerWidth, _ := textWidth(hdc, " · "+f.footer)
 	minimum := headerWidth + footerWidth
@@ -492,7 +504,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 		content = minimum
 	}
 	l.width = content + l.pad*2
-	l.height = rows*l.rowHeight + l.pad*2
+	l.height = l.headerHeight + rows*l.rowHeight + l.pad*2
 	return l
 }
 
@@ -544,6 +556,7 @@ func overlayRender(hwnd uintptr) {
 	overlayDraw(hdc, l, f, false)
 	gdiFlush.Call()
 	composeOverlay(colour, mask, int(l.width), int(l.height), int(overlay.px(6)), bgPixel, bgAlpha)
+	composeBorder(colour, int(l.width), int(l.height), int(overlay.px(6)), borderPixel, borderAlpha, int(l.pad), int(l.pad+l.headerBase+overlay.px(3)), int(overlay.px(1)))
 
 	if !overlayPlaced {
 		overlayPlaced = true
@@ -620,11 +633,17 @@ func overlayDraw(hdc uintptr, l overlayLayout, f overlayFrame, asMask bool) {
 	}
 	y := l.pad
 	selectObject.Call(hdc, overlay.bold)
-	header := f.title + " " + f.total
-	drawText(hdc, l.pad, y, header, paint([]uint32{textColor, warnColor, overColor}[f.warnLevel]))
-	w, _ := textWidth(hdc, header)
+	title := f.title + " "
+	titleWidth, titleHeight := textWidth(hdc, title)
+	drawText(hdc, l.pad, y+l.headerBase-titleHeight, title, paint(textColor))
+	selectObject.Call(hdc, overlay.big)
+	totalWidth, _ := textWidth(hdc, f.total)
+	drawText(hdc, l.pad+titleWidth, y, f.total, paint([]uint32{textColor, warnColor, overColor}[f.warnLevel]))
 	selectObject.Call(hdc, overlay.font)
-	drawText(hdc, l.pad+w, y, " · "+f.footer, paint(mutedColor))
+	footer := " · " + f.footer
+	_, footerHeight := textWidth(hdc, footer)
+	drawText(hdc, l.pad+titleWidth+totalWidth, y+l.headerBase-footerHeight, footer, paint(mutedColor))
+	y += l.headerHeight - l.rowHeight
 	firstNumber := 1
 	if f.expanded {
 		firstNumber = overlayFirstNumber
