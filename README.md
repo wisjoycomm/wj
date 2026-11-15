@@ -110,9 +110,10 @@ already set is left as it is. `-update` replaces Orca skills that differ from th
 kit's (the old file is backed up) and removes what older kits installed: the `.ps1`
 scripts and the `orca-stateless-worker` skill.
 
-Parallel work runs inside one Claude Code session. `/orca-orchestrator <goal>` plans
-tasks into `PLAN.md`; `/orca-orchestrator go` starts each ready task as an
-`orca-worker` subagent in its own git worktree, on the model its Agent column names;
+You talk to one Claude Code session. `/orca-orchestrator <goal>` plans
+tasks into `PLAN.md`; `/orca-orchestrator go` starts each ready task as a worker in its
+own git worktree: an Orca session started with the `orca` CLI, visible in its own tab
+(an `orca-worker` subagent when Orca is not running), on the model its Agent column names;
 the worker verifies, commits on its branch and reports one line; `/orca-orchestrator
 merge T-01` merges and archives on your say. `wj digest` condenses the failures in the
 project's Claude Code transcripts (repeated tool errors, denied commands, handovers

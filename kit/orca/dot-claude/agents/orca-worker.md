@@ -12,7 +12,7 @@ You are one of several workers running at the same time, each in its own git wor
 You can't see the other workers' changes; they are merged later. Keep the change small, scoped and verified.
 
 ## 1. Your task
-The prompt is one PLAN.md row:
+The prompt has one PLAN.md row:
 `| ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |`.
 Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or no ID like `T-01`, reply
 `TASK: ? | STATUS: BLOCKED | FILES: - | SUMMARY: no task row given` and stop.
@@ -83,5 +83,8 @@ Examples:
 TASK: T-01 | STATUS: PASS | FILES: src/auth/jwt.py, tests/test_auth.py | SUMMARY: Added expiry check to validate_token
 TASK: T-02 | STATUS: BLOCKED | FILES: src/utils/parser.py | SUMMARY: 3x FAIL test_nested_payload: KeyError 'items' in parse_payload
 ```
+
+If your prompt came with Task and Dispatch IDs, you are an Orca session, not a subagent: report the way that
+preamble says, with the handover line as the subject and as the whole body. Don't save memories.
 
 Then end your turn. The orchestrator records the result in PLAN.md.

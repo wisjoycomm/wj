@@ -48,7 +48,7 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 `.claude/settings.json` có năm phần, và tool chỉ thêm, không xoá:
 
 - `allow`: việc chạy không cần hỏi (`wj plan`, `wj verify`, `wj digest`, git chỉ đọc, `git add`, `git commit`,
-  subagent `orca-worker`, lệnh test của job). `git push` vẫn hỏi.
+  subagent `orca-worker`, `orca status` và `orca orchestration worker-start` / `check` / `worker-list`, lệnh test của job). `git push` vẫn hỏi.
 - `deny`: file Claude Code không được đọc. Luật "đừng đọc" trong `AGENTS.md` chỉ là lời nhắc; ở đây harness
   chặn hẳn: `PLAN-ARCHIVE.md`, lockfile, `node_modules/`, `.venv/`, `.env`, và `Library/` `Temp/` `Logs/` của Unity
   (tuỳ job), `go.sum` và `vendor/` của Go. Rule viết dạng `Read(**/node_modules/**)` nên đúng cả với thư mục
@@ -101,8 +101,15 @@ Không bị chặn: đọc một khoảng (`offset` + `limit`), `cat file | grep
 
 ## Chạy task song song: orchestrator và worker
 
-Worker là subagent của Claude Code, không phải phiên riêng. Bạn chỉ nói chuyện với một phiên (mở ở đâu cũng được,
-kể cả trong Orca):
+Bạn chỉ nói chuyện với một phiên: orchestrator. Worker chạy theo một trong hai kiểu, orchestrator tự chọn bằng
+`orca status` ở đầu phiên:
+
+| Kiểu | Khi nào | Worker là gì |
+|---|---|---|
+| Orca (mặc định) | Orca đang chạy và có lệnh `orca` | Một phiên agent riêng do `orca orchestration worker-start` tạo, trong worktree con của workspace hiện tại. Mỗi worker có tab riêng trong Orca: bạn thấy nó đang làm gì, trả lời câu hỏi cấp quyền, hoặc dừng nó |
+| Subagent | Không có Orca | Subagent `orca-worker` của Claude Code, chạy nền trong phiên orchestrator, worktree dưới `.claude/worktrees/` |
+
+Kiểu subagent khó theo dõi (không thấy worker nào đang chạy, đang làm gì), nên chỉ còn là phương án dự phòng.
 
 ```text
 /orca-orchestrator <mục tiêu>     chia thành task trong PLAN.md, đưa bạn xem, rồi dừng
@@ -110,10 +117,23 @@ kể cả trong Orca):
 /orca-orchestrator merge T-01     gộp nhánh của task vào nhánh hiện tại, xoá worktree, archive
 ```
 
-Mỗi worker (`.claude/agents/orca-worker.md`) nhận đúng một dòng của `PLAN.md`, làm trong worktree riêng dưới
-`.claude/worktrees/`, chạy `wj verify`, commit lên nhánh của worktree đó, rồi trả về một dòng
+Mỗi worker nhận đúng một dòng của `PLAN.md`, làm theo `.claude/agents/orca-worker.md` trong worktree riêng, chạy `wj verify`, commit lên nhánh của worktree đó, rồi trả về một dòng
 `TASK: ... | STATUS: PASS|PARTIAL|BLOCKED | ...`. Orchestrator ghi kết quả vào `PLAN.md` và in lệnh
 `git diff HEAD...<nhánh>` để bạn xem. Nó không tự merge: phải có lệnh `merge` của bạn.
+
+Ở kiểu Orca:
+
+- Worktree của task `T-01` tên `t-01`, nhánh theo tiền tố nhánh bạn đặt trong Orca (ví dụ `<tên>/t-01`), tạo từ
+  nhánh orchestrator đang đứng. Khi worker xong, Orca đánh thức orchestrator bằng tin `worker_done`; orchestrator
+  không tự hỏi vòng.
+- Worker là một phiên Claude Code thường, không có `permissionMode: acceptEdits` của subagent: nó hỏi quyền theo
+  cấu hình Claude Code và Orca của bạn, và câu hỏi hiện ở tab của nó.
+- Cột Agent: `claude:<model>` thành `--agent claude --model <model>` với model id bất kỳ, nên không cần
+  `wj plan worker`. `codex` và `agy` thành `--agent codex` và `--agent antigravity`, orchestrator tự chạy được.
+- `merge` xoá worktree bằng `orca worktree rm --delete-branch`.
+- Đã thử (Orca trên Windows, 2026-11-15): một worker `claude` với `--model haiku` trong worktree con, đọc được
+  `.claude/agents/orca-worker.md` và báo `worker_done` về orchestrator. Chưa thử: một task thật có sửa file và
+  commit, worker `codex` / `agy`, và project Unity (`--worktree current`).
 
 ### Model nào làm việc nào
 
@@ -136,7 +156,8 @@ cho tới khi lập kế hoạch. Bản mặc định:
 Task bị BLOCKED sau khi đã thử thật thì chạy lại ở bậc cao hơn. `haiku` `sonnet` `opus` là bậc, gateway của bạn
 quyết định mỗi bậc là model nào (xem [Model](model.md)).
 
-**Model hãng khác (GPT, Gemini, DeepSeek...).** Worker chạy được bằng bất kỳ model nào gateway phục vụ cho Claude
+**Model hãng khác (GPT, Gemini, DeepSeek...), kiểu subagent.** Ở kiểu Orca chỉ cần ghi `claude:<model id>` vào cột
+Agent; phần dưới đây chỉ cần khi không có Orca. Worker chạy được bằng bất kỳ model nào gateway phục vụ cho Claude
 Code. Tool Agent của Claude Code chỉ nhận `sonnet`, `opus`, `haiku`, `fable` làm model của subagent, nhưng một file
 subagent thì ghi được model id bất kỳ. Vì vậy mỗi model hãng khác có một bản worker riêng:
 
@@ -157,8 +178,9 @@ qua. Giao task nhỏ trước. Đã thử (Claude Code 2.1.322, 2026-11-12): sub
 đó lên API; chưa thử chạy một task thật bằng model hãng khác.
 
 **Agent khác (Codex, Antigravity).** Cột Agent cũng nhận `codex`, `agy`, hoặc kèm model: `codex:<model>`,
-`agy:<model>`, và dùng được trong `.claude/models.md` như mọi giá trị khác. Orchestrator của Claude Code chỉ tự chạy
-dòng `claude`; task `codex` / `agy` nó để `TODO` và liệt kê ra để bạn chạy trong app đó. Dòng task, Scope và Verify
+`agy:<model>`, và dùng được trong `.claude/models.md` như mọi giá trị khác. Ở kiểu Orca orchestrator chạy chúng
+bằng `--agent codex` / `--agent antigravity`; ở kiểu subagent nó chỉ tự chạy dòng `claude`, còn task `codex` / `agy`
+nó để `TODO` và liệt kê ra để bạn chạy trong app đó. Dòng task, Scope và Verify
 giống nhau cho mọi agent.
 
 ### Unity: chung checkout
@@ -300,7 +322,7 @@ ghi chú, không danh sách). Nhờ vậy `wj` lấy một task chỉ cần đ�
 | Pri | `P0` gấp, `P1` cao, `P2` thường, `P3` để sau (thay cho Backlog) |
 | SP | Story point kiểu agile: `1` `2` `3` `5` `8` `13`, hoặc `?` chưa ước lượng. Từ 8 nên tách nhỏ |
 | Status | `TODO` `DOING` `DONE` (chưa merge) `BLOCKED` `PARTIAL` |
-| Agent | `claude` (model của phiên đang chạy), hoặc `claude:<model>` để worker chạy bằng model đó. `codex` `agy` vẫn hợp lệ nhưng kit hiện không cài gì cho chúng |
+| Agent | `claude` (model của phiên đang chạy), hoặc `claude:<model>` để worker chạy bằng model đó. `codex` `agy`: chạy được qua Orca, kit không cài gì riêng cho chúng |
 | Depends | ID cách nhau dấu phẩy, hoặc `-` |
 | Scope | Đường dẫn trong backtick, hoặc `-` |
 | Verify | Một lệnh trong backtick, hoặc `-` để tự đoán |

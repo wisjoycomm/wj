@@ -1,23 +1,24 @@
 ---
 name: orca-orchestrator
-description: Act as the orchestrator for parallel workers - plan tasks into PLAN.md, run them as orca-worker subagents in git worktrees, record their handover lines, and merge on request. Use only when invoked as /orca-orchestrator.
+description: Act as the orchestrator for parallel workers - plan tasks into PLAN.md, run them as Orca workers (or orca-worker subagents) in git worktrees, record their handover lines, and merge on request. Use only when invoked as /orca-orchestrator.
 argument-hint: [goal | go | merge T-01 T-02]
 disable-model-invocation: true
-allowed-tools: Bash(wj plan *) Agent(orca-worker)
+allowed-tools: Bash(wj plan *) Bash(orca status) Bash(orca orchestration worker-start *) Bash(orca orchestration check *) Bash(orca orchestration worker-list *) Agent(orca-worker)
 ---
 
 # Orca orchestrator
 
 You are the orchestrator for this repo. You plan and track; you don't implement tasks yourself.
-Workers are `orca-worker` subagents: each runs one task in its own git worktree, commits it on that worktree's
-branch and replies with one handover line.
+Each worker runs one task in its own git worktree by following `.claude/agents/orca-worker.md`, commits it on
+that worktree's branch and reports one handover line. A worker is an Orca session I can watch in its own tab
+(Orca mode, the default), or an `orca-worker` subagent when Orca is not there (step 0).
 
 Input for this turn: $ARGUMENTS
 - If it is a goal: do step 1, show me the new rows, and stop. I check the plan before any worker starts.
 - If it is `go`, or empty: do step 2.
 - If it says to merge (`merge`, `merge T-01 T-02`), or that I merged: do step 4, then step 2.
 
-A worker's result arrives by itself when it finishes: do step 3 for it then.
+A worker's result arrives by itself when it finishes: do step 3 for it then. Never poll for it.
 
 ## 0. Is `wj` there?
 `wj` is an optional helper: this skill works without it, a bit slower and with more tokens.
@@ -25,6 +26,11 @@ Run `wj version` once per session and read the one-line file `.claude/wj-kit` (t
 - `wj` not found: manual mode. Wherever a step shows a `wj` command, use its "Without wj" line instead. Tell me once: "wj not installed, manual mode".
 - `wj` older than the number in `.claude/wj-kit`: manual mode too, and tell me once to run `wj update`.
 - Otherwise use the `wj` commands.
+
+Then run `orca status` once per session.
+- It prints `runtimeReachable: true`: Orca mode. Workers are started with the `orca` CLI.
+- `orca` not found, or the runtime is not reachable: subagent mode. Tell me once: "Orca not running, workers run
+  as subagents". Wherever a step has a "Subagent mode" part, use it.
 
 ## PLAN.md format (strict)
 PLAN.md is ONE Markdown table and nothing else: no title, no comments, no lists, no text before or after it.
@@ -106,7 +112,33 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
 - For each one, set Status `DOING`.
 - Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
   last commit, so a worker only sees what is committed.
-- Start all of them in one message, one Agent call per task:
+- Orca mode: start all of them in one message, one Bash call per task. The row has backticks, so pass it on
+  stdin exactly like this, never inside quotes:
+
+  ```
+  orca orchestration worker-start --spec-file - --task-title "T-01 cart discount" --worktree new-child --name t-01 --base-branch <current branch> --agent claude --model haiku <<'EOF'
+  Read .claude/agents/orca-worker.md and do exactly what it says for this PLAN.md row.
+  <that task's PLAN.md row, the whole line>
+  EOF
+  ```
+
+  - `--name`: the ID in lower case. `--base-branch`: the branch this checkout is on (`git branch --show-current`),
+    so the worker starts from the commit you just made.
+  - A task launched again whose folder from the earlier try is still in `git worktree list`: replace `--worktree
+    new-child --name ... --base-branch ...` with `--worktree path:<that folder>`, so the worker keeps its changes.
+  - `--agent` and `--model`, from the task's Agent:
+
+    | Agent | flags |
+    |---|---|
+    | `claude` | `--agent claude` |
+    | `claude:<model>` (`haiku`, `sonnet`, `opus`, `fable`, or any model id) | `--agent claude --model <model>` |
+    | `codex`, `codex:<model>` | `--agent codex`, plus `--model <model>` if given |
+    | `agy`, `agy:<model>` | `--agent antigravity`, plus `--model <model>` if given |
+
+    Ignore the WORKERS lines of `wj plan`: they are for subagent mode.
+  - Each call prints a receipt with `dispatchId` and `workspace` (the worktree folder is the part after `::`).
+    If a call fails, don't run it again: set the task back to `TODO` and show me the error.
+- Subagent mode: start all of them in one message, one Agent call per task:
   - `description`: the ID and a few words, e.g. `T-01 cart discount`
   - `prompt`: that task's PLAN.md row, the whole line, nothing else
   - `subagent_type` and `model`, from the task's Agent:
@@ -123,10 +155,22 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
     Without wj: the subagent is `orca-worker-` plus the id in lower case with every run of characters other
     than a-z and 0-9 turned into one `-`; it exists if `.claude/agents/<that name>.md` does.
   - A `codex` or `agy` task stays `TODO`. List these tasks for me with their IDs: I run them in that app.
-- Workers run in the background. Tell me which ones started, then end your turn: don't wait or poll.
+- Workers run in the background. Tell me which ones started (Orca mode: each has its own tab under this
+  workspace in Orca), then end your turn: don't wait or poll.
 
 ## 3. Record
-When a worker finishes, its result ends with a handover line and names its worktree branch.
+Orca mode: Orca wakes you with the worker's message, or with a line telling you to run
+`orca orchestration check --run <id>`: run exactly that. Lost track of the workers: `orca orchestration worker-list`.
+- `worker_done`: the handover line is in its subject or body. The branch is the one `git worktree list` shows for
+  that worker's folder.
+- `question`: answer with `orca orchestration reply --id <message id> --body "<answer>"` when the row answers it;
+  otherwise ask me.
+- `escalation`: the worker stopped without reporting. Set the task `BLOCKED` with Notes `worker stopped: <reason>`
+  and tell me; I can look at its tab.
+
+Subagent mode: when a worker finishes, its result ends with a handover line and names its worktree branch.
+
+Both modes:
 - PASS -> Status `DONE`; BLOCKED -> `BLOCKED`; PARTIAL -> `PARTIAL`.
   Put the SUMMARY (cut to 100 characters) in Notes and the branch in Session (`-` if the result names none).
 - A result with no handover line (the worker stopped early) is `BLOCKED` with Notes `no handover line`.
@@ -145,6 +189,12 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
   On a conflict run `git merge --abort`, set that task `BLOCKED` with Notes `merge conflict: <file>`, and go on
   with the other tasks.
 - After a clean merge, remove the worker's worktree and branch (find the folder with `git worktree list`):
+
+  ```
+  orca worktree rm --worktree path:<folder> --delete-branch
+  ```
+
+  Subagent mode:
 
   ```
   git worktree remove <folder>
@@ -170,6 +220,7 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
 
 ## Unity mode (shared checkout)
 Applies when `.claude/agents/orca-worker.md` has no `isolation: worktree` line. Workers share this checkout, so there are no branches or worktrees.
+- Orca mode: start each worker with `--worktree current` and no `--name` or `--base-branch`.
 - Script tasks (only `.cs`, `.asmdef`...) run in parallel as usual.
 - Editor tasks (Scope has `*.unity`, `*.prefab`, `*.asset`, or the task runs tests / edits UI) run one at a time, and only when no script task is `DOING`.
 - Record: Session is the task's commit hash (`git log --format=%h -1 --grep "<ID>:"`); review with `git --no-pager show <hash>`.

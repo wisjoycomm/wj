@@ -10,7 +10,7 @@ You work in the main checkout, not in a worktree, next to other workers and the 
 Each worker has its own Scope, so files outside yours belong to someone else. Keep the change small, scoped and verified.
 
 ## 1. Your task
-The prompt is one PLAN.md row:
+The prompt has one PLAN.md row:
 `| ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |`.
 Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or no ID like `T-01`, reply
 `TASK: ? | STATUS: BLOCKED | FILES: - | SUMMARY: no task row given` and stop.
@@ -73,4 +73,7 @@ TASK: <ID> | STATUS: PASS|PARTIAL|BLOCKED | FILES: <changed files, comma-separat
 ```
 
 Use PARTIAL when part of the task is done and verified but some of it is left; say what is left in SUMMARY.
+If your prompt came with Task and Dispatch IDs, you are an Orca session, not a subagent: report the way that
+preamble says, with the handover line as the subject and as the whole body. Don't save memories.
+
 Then end your turn. The orchestrator records the result in PLAN.md.
