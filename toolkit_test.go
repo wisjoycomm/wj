@@ -85,3 +85,28 @@ func TestToolkitChildExitStatusGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestToolkitWSLModule(t *testing.T) {
+	path, err := toolkitScript("windows", "install", "wsl")
+	if err != nil || path != "toolkit/windows/install-wsl.ps1" {
+		t.Fatalf("got %q, %v", path, err)
+	}
+	data, err := bundledToolkit.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"# >>> wisjoy-wsl >>>", "--no-launch", "exit 1"} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Fatalf("install-wsl.ps1 lacks %q", want)
+		}
+	}
+	for _, args := range [][3]string{{"windows", "uninstall", "wsl"}, {"linux", "install", "wsl"}, {"darwin", "install", "wsl"}} {
+		if _, err := toolkitScript(args[0], args[1], args[2]); err == nil {
+			t.Fatalf("%v admitted", args)
+		}
+	}
+	var out bytes.Buffer
+	if err := runToolkit([]string{"install", "wsl", "-groups", "1"}, strings.NewReader(""), &out); err == nil {
+		t.Fatal("-groups admitted for wsl")
+	}
+}

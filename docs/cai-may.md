@@ -8,6 +8,7 @@ wj apps install claude,codex     cài app còn thiếu
 wj apps update codex,orca        cập nhật app
 wj tools install cli             cài bộ công cụ dòng lệnh (hỏi chọn nhóm)
 wj tools install wm              cài quản lý cửa sổ (không bắt buộc)
+wj tools install wsl             cài WSL2 + Ubuntu (Windows)
 wj update                        cập nhật wj
 ```
 

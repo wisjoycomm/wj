@@ -208,6 +208,17 @@ wj tools install wm
 - Linux: cau hinh i3/Hyprland **da cai san**; module khong cai desktop session.
 
 Phan nay thay doi shortcut, startup, taskbar/Dock va cach xep cua so.
+
+WSL2 + Ubuntu (chi Windows):
+
+```powershell
+wj tools install wsl
+```
+
+- Lan dau can quyen admin va khoi dong lai may, sau do chay lai lenh.
+- Ghi khoi co danh dau vao `~/.wslconfig`: RAM toi da = nua RAM may, tu tra RAM/o dia.
+- Cai Ubuntu, dat lam distro mac dinh; Docker Desktop (neu co) tu dung duoc trong Ubuntu.
+- Code chay trong Linux/Docker de o `~/projects` trong WSL, khong de o `/mnt/d`.
 Neu dang dung GlazeWM, tool hoi rieng truoc khi go de chuyen sang Komorebi.
 
 ## 4. Ket noi Claude - chon dung loai key

@@ -163,6 +163,7 @@ const helpTools = `BỘ CÔNG CỤ DÒNG LỆNH & QUẢN LÝ CỬA SỔ
   wj tools install cli               cài (hỏi chọn nhóm)
   wj tools install cli -groups 1,2,4 chọn sẵn nhóm
   wj tools install wm                quản lý cửa sổ kiểu i3
+  wj tools install wsl               WSL2 + Ubuntu, giới hạn RAM (Windows)
   wj tools uninstall cli | wm        gỡ
 
 Nhóm: 1 terminal & giao diện   2 tiện ích (rg, fd, bat, lazygit...)

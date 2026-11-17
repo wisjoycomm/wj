@@ -239,7 +239,8 @@ func TestTypingFiltersThenEnterAppliesTheFirstMatch(t *testing.T) {
 
 func TestCommandsWithValuesOpenTheirListAndApplyOnEnter(t *testing.T) {
 	s := uiFixture(t)
-	start := usageView{Spec: "week", Top: -1, Overview: true}
+	start := usageView{Spec: "2026-11", Top: -1, Overview: true}
+	// A fixed month: press runs on the real clock, so "week" would lose the fixture data.
 	// "project" + Enter opens the project list with its first value ("all") highlighted;
 	// each Down moves one line (game, then tool); Enter applies the highlighted one.
 	for raw, want := range map[string]string{"project\r\r": "", "project\r\x1b[B\r": "game", "project\r\x1b[B\x1b[B\r": "tool"} {
@@ -247,7 +248,7 @@ func TestCommandsWithValuesOpenTheirListAndApplyOnEnter(t *testing.T) {
 			t.Errorf("%q gives project %q, want %q", raw, final.Project, want)
 		}
 	}
-	final, _ := press(t, s, usageView{Spec: "week", Top: -1, Overview: true, Project: "tool"}, "project\r\r")
+	final, _ := press(t, s, usageView{Spec: "2026-11", Top: -1, Overview: true, Project: "tool"}, "project\r\r")
 	if final.Project != "" {
 		t.Errorf("choosing all clears the filter, got %q", final.Project)
 	}

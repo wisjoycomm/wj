@@ -261,6 +261,7 @@ wj tools install cli
 wj tools install cli -groups 1,2,4
 wj tools install wm
 wj tools install wm -dry-run
+wj tools install wsl
 wj tools uninstall cli
 wj tools uninstall wm
 ```
@@ -272,6 +273,7 @@ wj tools uninstall wm
 | CLI 3: development | Git, fnm/Node.js, uv/Python, Neovim, Antigravity IDE, optional Docker |
 | CLI 4: agents | Claude Code, Codex CLI, Antigravity CLI |
 | Window manager | Windows: Komorebi + whkd. macOS: AeroSpace. Linux: configuration for existing i3/Hyprland |
+| WSL (Windows only) | WSL2 + Ubuntu as the default distro, marked block in `~/.wslconfig` capping RAM at half the machine. Install only; Docker Desktop picks up the default distro |
 
 Availability varies by OS/package manager. Shell setup includes the original
 marked profile blocks, aliases, prompt/font, Git defaults and Node LTS setup.

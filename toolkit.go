@@ -245,6 +245,7 @@ func appsMenu(input io.Reader, out io.Writer) error {
 		{"Cập nhật ứng dụng", func() error { return appMenu("update", input, out) }},
 		{"Cài công cụ dòng lệnh (terminal, git, node, python...)", tool("install", "cli")},
 		{"Cài quản lý cửa sổ (không bắt buộc)", tool("install", "wm")},
+		{"Cài WSL2 + Ubuntu (Windows)", tool("install", "wsl")},
 		{"Gỡ công cụ dòng lệnh", tool("uninstall", "cli")},
 		{"Gỡ quản lý cửa sổ", tool("uninstall", "wm")},
 	}, input, out)
@@ -364,8 +365,18 @@ func toolkitScript(platform, action, module string) (string, error) {
 	if action != "install" && action != "uninstall" {
 		return "", errors.New("chỉ có install hoặc uninstall")
 	}
+	if module == "wsl" {
+		// WSL is Windows-only, and there is no uninstall: removing a distro deletes its files.
+		if platform != "windows" {
+			return "", errors.New("wsl chỉ dùng trên Windows")
+		}
+		if action != "install" {
+			return "", errors.New("wsl không có uninstall: gỡ distro sẽ xoá hết file trong đó; tự chạy wsl --unregister Ubuntu nếu chắc chắn")
+		}
+		return "toolkit/windows/install-wsl.ps1", nil
+	}
 	if module != "cli" && module != "wm" {
-		return "", errors.New("chỉ có cli (công cụ dòng lệnh) hoặc wm (quản lý cửa sổ)")
+		return "", errors.New("chỉ có cli (công cụ dòng lệnh), wm (quản lý cửa sổ) hoặc wsl (WSL2 + Ubuntu, Windows)")
 	}
 	switch platform {
 	case "windows":
@@ -378,7 +389,7 @@ func toolkitScript(platform, action, module string) (string, error) {
 }
 
 func toolkitList(out io.Writer) {
-	fmt.Fprintln(out, "Bundled tools from Bo_cong_cu:\n  cli group 1: terminal, Starship, Nerd Font, fzf, zoxide; PowerShell/Clink on Windows\n  cli group 2: ripgrep, fd, bat, eza, jq, lazygit, delta, btop, GitHub CLI\n  cli group 3: Git, fnm/Node, uv/Python, Neovim, Antigravity IDE; optional Docker\n  cli group 4: Claude Code, Codex CLI, Antigravity CLI\n  wm Windows: Komorebi + whkd, i3-style keys, monitor workspaces and bars\n  wm macOS: AeroSpace and i3-style keys\n  wm Linux: configure an existing i3/Hyprland installation\n\nBoth modules include uninstall. Package availability depends on your OS.\nUse -dry-run to preview an action without extracting or executing scripts.")
+	fmt.Fprintln(out, "Bundled tools from Bo_cong_cu:\n  cli group 1: terminal, Starship, Nerd Font, fzf, zoxide; PowerShell/Clink on Windows\n  cli group 2: ripgrep, fd, bat, eza, jq, lazygit, delta, btop, GitHub CLI\n  cli group 3: Git, fnm/Node, uv/Python, Neovim, Antigravity IDE; optional Docker\n  cli group 4: Claude Code, Codex CLI, Antigravity CLI\n  wm Windows: Komorebi + whkd, i3-style keys, monitor workspaces and bars\n  wsl Windows: WSL2 + Ubuntu, ~/.wslconfig (RAM cap), install only\n  wm macOS: AeroSpace and i3-style keys\n  wm Linux: configure an existing i3/Hyprland installation\n\nBoth modules include uninstall. Package availability depends on your OS.\nUse -dry-run to preview an action without extracting or executing scripts.")
 }
 
 func runToolkit(args []string, input io.Reader, out io.Writer) error {
@@ -387,7 +398,7 @@ func runToolkit(args []string, input io.Reader, out io.Writer) error {
 		return nil
 	}
 	if len(args) < 2 {
-		return errors.New("cách dùng: wj tools install|uninstall cli|wm [-groups 1,2,4] [-dry-run]; xem: wj help tools")
+		return errors.New("cách dùng: wj tools install|uninstall cli|wm, install wsl [-groups 1,2,4] [-dry-run]; xem: wj help tools")
 	}
 	action, module := args[0], args[1]
 	script, err := toolkitScript(runtime.GOOS, action, module)
@@ -419,6 +430,8 @@ func runToolkit(args []string, input io.Reader, out io.Writer) error {
 	fmt.Fprintf(out, "%s %s on %s using bundled %s\n", action, module, runtime.GOOS, script)
 	if module == "cli" {
 		fmt.Fprintln(out, "Updates the toolkit's marked shell-profile block, command aliases, terminal styling and Git defaults.")
+	} else if module == "wsl" {
+		fmt.Fprintln(out, "Enables WSL2 (admin + reboot the first time), writes a marked block in ~/.wslconfig, installs Ubuntu and makes it the default distro.")
 	} else {
 		fmt.Fprintln(out, "Changes window-manager configuration, shortcuts, workspace layout and desktop/taskbar integration.")
 	}
