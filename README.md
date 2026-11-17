@@ -267,7 +267,7 @@ wj tools uninstall wm
 
 | Group | Contents |
 | --- | --- |
-| CLI 1: terminal | Starship, Nerd Font, fzf, zoxide; PowerShell 7, Windows Terminal and Clink on Windows |
+| CLI 1: terminal | Starship, Nerd Font, fzf, zoxide; Windows Terminal (opening built-in Windows PowerShell 5.1) and Clink on Windows |
 | CLI 2: utilities | ripgrep, fd, bat, eza, jq, lazygit, delta, btop, GitHub CLI |
 | CLI 3: development | Git, fnm/Node.js, uv/Python, Neovim, Antigravity IDE, optional Docker |
 | CLI 4: agents | Claude Code, Codex CLI, Antigravity CLI |
@@ -411,6 +411,11 @@ Antigravity CLI has no supported custom endpoint and is reported as skipped.
 | Codex | `~/.codex/config.toml`; gateway Responses API provider and credential |
 | OpenCode | `~/.config/opencode/opencode.json` or existing `.jsonc`; provider options and models |
 | Cursor | Manual instructions for Settings > Models; no global environment writes |
+
+`-scope project` (asked by the wizard inside a git project) writes Claude to
+`<project>/.claude/settings.local.json` and OpenCode to `<project>/opencode.json`,
+both added to `.gitignore`, instead of the machine-wide files above. Codex,
+Cursor and Antigravity are machine-wide only.
 
 ## Token usage from session files
 

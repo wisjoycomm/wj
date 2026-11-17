@@ -40,6 +40,8 @@ func runCLIWithHome(args []string, input io.Reader, out io.Writer, home string) 
 	neutral := flags.Bool("neutral-headers", false, "gateway: Claude Code gửi header trung tính thay vì danh tính Claude Code (đường vòng khi gateway từ chối Claude Code); tắt bằng -neutral-headers=false")
 	launch := flags.Bool("run", false, "mở Claude Code ngay sau khi xong")
 	dry := flags.Bool("dry-run", false, "chạy thử: không ghi file, không gọi mạng, không cài, không đăng nhập")
+	scope := flags.String("scope", "", "global = toàn máy (mặc định), project = chỉ project đang đứng (ghi .claude/settings.local.json, git bỏ qua)")
+	dir := flags.String("dir", "", "với -scope project: thư mục project (mặc định = thư mục đang đứng)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -149,6 +151,21 @@ func runCLIWithHome(args []string, input io.Reader, out io.Writer, home string) 
 	if err := validateTargets(targets, p, *profile != "" || *use != ""); err != nil {
 		return err
 	}
+	if wizard && *scope == "" && *dir == "" && !hasGlobalOnly(targets) {
+		if *scope, err = askScope(input, out, "", home); err != nil {
+			return err
+		}
+	}
+	scopeName, projectDir, err := resolveScope(*scope, *dir, home)
+	if err != nil {
+		return err
+	}
+	if scopeName == scopeProject && hasGlobalOnly(targets) {
+		return errors.New("chỉ Claude và OpenCode kết nối riêng cho project được; Codex, Cursor, Antigravity chỉ có toàn máy (bỏ -scope project hoặc dùng -only claude,opencode)")
+	}
+	if *dir != "" && scopeName != scopeProject {
+		return errors.New("-dir chỉ dùng với -scope project")
+	}
 	if (*launch || *install) && !contains(targets, "claude") {
 		return errors.New("-install-claude và -run chỉ dùng khi có claude trong -only")
 	}
@@ -227,13 +244,21 @@ func runCLIWithHome(args []string, input io.Reader, out io.Writer, home string) 
 		var err error
 		switch name {
 		case "claude":
-			line, err = applyClaude(home, p, *dry)
+			if scopeName == scopeProject {
+				line, err = applyClaudeProject(home, projectDir, p, *dry)
+			} else {
+				line, err = applyClaude(home, p, *dry)
+			}
 		case "codex":
 			line, err = applyCodexModels(home, "gateway", p.BaseURL, p.Credential, gpt, *provider, p.Models, *dry)
 		case "cursor":
 			line = setupCursor()
 		case "opencode":
-			line, err = setupOpenCode(home, p.BaseURL, p.Credential, p.Models, *provider, *dry)
+			if scopeName == scopeProject {
+				line, err = applyOpenCodeProject(projectDir, p.BaseURL, p.Credential, p.Models, *provider, "@ai-sdk/openai-compatible", *dry)
+			} else {
+				line, err = setupOpenCode(home, p.BaseURL, p.Credential, p.Models, *provider, *dry)
+			}
 		case "agy":
 			line = "SKIP - Antigravity không hỗ trợ gateway riêng, dùng tài khoản đã đăng nhập"
 		}
@@ -306,6 +331,16 @@ func splitList(value string) []string {
 func contains(values []string, value string) bool {
 	for _, v := range values {
 		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+// hasGlobalOnly reports an app whose connection can only be machine-wide.
+func hasGlobalOnly(targets []string) bool {
+	for _, t := range targets {
+		if t != "claude" && t != "opencode" {
 			return true
 		}
 	}

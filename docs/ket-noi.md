@@ -21,6 +21,24 @@ wj -use-profile adnx -run
 
 Sau khi đổi, mở phiên Claude mới và gõ `/status` để kiểm tra.
 
+### Toàn máy hay chỉ project
+
+Chạy `wj configure claude` trong một project git thì tool hỏi thêm áp dụng cho đâu:
+
+| Chọn | Ghi vào | Tác dụng |
+|---|---|---|
+| Toàn máy (mặc định) | `~/.claude/settings.json` | mọi project |
+| Chỉ project này | `<project>/.claude/settings.local.json` | chỉ phiên Claude mở trong project đó |
+
+Lệnh có sẵn tham số: thêm `-scope project` (và `-dir THƯ_MỤC` nếu không đứng trong project), vd
+`wj -use-profile work -scope project`.
+
+- File của project là file cá nhân: tool tự thêm nó vào `.gitignore`, nên key không vào commit.
+- Claude Code gộp `env` của hai file. Để kết nối toàn máy không lọt vào project, tool ghi các
+  biến kết nối toàn máy mà project không dùng thành chuỗi rỗng trong file project.
+- Bỏ kết nối riêng của project: xoá các biến `ANTHROPIC_*` / `CLAUDE_CODE_OAUTH_TOKEN` trong
+  `.claude/settings.local.json` (giữ biến của `wj proxy project` nếu đang đo token).
+
 ## Codex và OpenCode
 
 ```text
@@ -31,6 +49,11 @@ wj configure opencode
 ```
 
 Gateway cho Codex phải hỗ trợ `/v1/responses`.
+
+OpenCode cũng chọn được chỉ project: `wj configure opencode` trong project git sẽ hỏi, hoặc thêm
+`-scope project`. Tool ghi `opencode.json` ở gốc project và thêm nó vào `.gitignore`; nếu file đó
+đã nằm trong git thì tool từ chối để key không bị commit. Codex chỉ có toàn máy, vì Codex bỏ qua
+provider trong config của project.
 
 Cursor, Antigravity và Orca tự đăng nhập trong app; `wj configure` chỉ in hướng dẫn.
 

@@ -115,7 +115,8 @@ func TestClientCredentialRoutingAndDryRun(t *testing.T) {
 
 func TestWizardInputDoesNotConsumeNextMenuChoice(t *testing.T) {
 	home := testHome(t)
-	in := strings.NewReader("2\nsk-ant-oat-test\n\nno\n8\n0\n")
+	// Auth, token, scope (asked: tests run inside this git repo), profile name, install, next menu.
+	in := strings.NewReader("2\nsk-ant-oat-test\n\n\nno\n8\n0\n")
 	var out bytes.Buffer
 	if err := runCLIWithHome(nil, in, &out, home); err != nil {
 		t.Fatal(err)
