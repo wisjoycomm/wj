@@ -141,7 +141,12 @@ func applyOpenCode(home, base, key string, ids []string, provider, npm string, d
 	if root == "" {
 		root = filepath.Join(home, ".config")
 	}
-	dir := filepath.Join(root, "opencode")
+	return applyOpenCodeIn(filepath.Join(root, "opencode"), base, key, ids, provider, npm, dry)
+}
+
+// applyOpenCodeIn writes opencode.json(c) in dir: the user config folder, or a
+// project root for a project-only connection.
+func applyOpenCodeIn(dir, base, key string, ids []string, provider, npm string, dry bool) (string, error) {
 	// JSONC wins when both exist. Read both to retain unrelated settings.
 	doc := map[string]any{}
 	path := filepath.Join(dir, "opencode.json")
@@ -272,6 +277,8 @@ func configureAPIClient(id string, args []string, input io.Reader, out io.Writer
 	noLogin := flags.Bool("no-login", false, "prepare normal login without starting it")
 	device := flags.Bool("device-auth", false, "Codex device-code login")
 	fromProfile := flags.String("from-profile", "", "dùng domain + key của profile gateway Claude đã lưu (vd adnx)")
+	scope := flags.String("scope", "", "OpenCode: global = toàn máy (mặc định), project = chỉ project đang đứng (opencode.json trong project, git bỏ qua)")
+	dir := flags.String("dir", "", "với -scope project: thư mục project (mặc định = thư mục đang đứng)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -309,6 +316,24 @@ func configureAPIClient(id string, args []string, input io.Reader, out io.Writer
 	}
 	if !validName(*provider) {
 		return errors.New("provider-id chỉ gồm chữ, số, _ hoặc -")
+	}
+	if id == "codex" && (*scope != "" && *scope != scopeGlobal || *dir != "") {
+		return errors.New("Codex chỉ kết nối toàn máy: Codex bỏ qua provider trong config của project. Bỏ -scope/-dir")
+	}
+	if id == "opencode" && *auth != "login" && len(args) == 0 {
+		if *scope, err = askScope(input, out, "", home); err != nil {
+			return err
+		}
+	}
+	scopeName, projectDir, err := resolveScope(*scope, *dir, home)
+	if err != nil {
+		return err
+	}
+	if scopeName == scopeProject && *auth == "login" {
+		return errors.New("đăng nhập là của tài khoản, luôn toàn máy; bỏ -scope project")
+	}
+	if *dir != "" && scopeName != scopeProject {
+		return errors.New("-dir chỉ dùng với -scope project")
 	}
 	if *device && (id != "codex" || *auth != "login") {
 		return errors.New("-device-auth chỉ dùng với Codex -auth login")
@@ -489,7 +514,13 @@ func configureAPIClient(id string, args []string, input io.Reader, out io.Writer
 				return errors.New("direct OpenCode API requires provider-id openai or anthropic")
 			}
 		}
-		path, e := applyOpenCode(home, *base, key, ids, *provider, npm, false)
+		var path string
+		var e error
+		if scopeName == scopeProject {
+			path, e = applyOpenCodeProject(projectDir, *base, key, ids, *provider, npm, false)
+		} else {
+			path, e = applyOpenCode(home, *base, key, ids, *provider, npm, false)
+		}
 		if e != nil {
 			return e
 		}

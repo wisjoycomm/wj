@@ -51,7 +51,7 @@ $PKGS = @(
     @{ G = 4; Name = 'Antigravity CLI (agy)';   Id = 'Google.AntigravityCLI';         Cmd = 'agy' }
 )
 $GROUPS = [ordered]@{
-    '1' = 'Terminal dep + tien: PowerShell 7, Windows Terminal, Starship, Nerd Font, Clink cho CMD, fzf, zoxide'
+    '1' = 'Terminal dep + tien: PowerShell 7 (neu ban cu da cai), Windows Terminal, Starship, Nerd Font, Clink cho CMD, fzf, zoxide'
     '2' = 'Tim kiem / xem file: ripgrep, fd, bat, eza, jq, lazygit, delta, btop, gh'
     '3' = 'Lap trinh backend: Git, Node (fnm), Python (uv), Neovim, Antigravity IDE, Docker (hoi rieng)'
     '4' = 'Coding agent: Claude Code, Codex CLI, Antigravity CLI (agy)'

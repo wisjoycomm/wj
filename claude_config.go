@@ -53,10 +53,16 @@ func isClaudeRoutingKey(key string) bool {
 }
 
 func applyClaude(home string, p connectionProfile, dry bool) (string, error) {
+	return applyClaudeFile(claudeSettingsPath(home), p, dry, nil)
+}
+
+// applyClaudeFile writes the connection into one settings file. blank lists
+// routing keys a lower settings layer sets; each one this connection does not
+// set is written as "" so it cannot leak in.
+func applyClaudeFile(path string, p connectionProfile, dry bool, blank []string) (string, error) {
 	if err := p.validate(); err != nil {
 		return "", err
 	}
-	path := claudeSettingsPath(home)
 	root, err := readSettings(path)
 	if err != nil {
 		return "", err
@@ -130,6 +136,11 @@ func applyClaude(home string, p connectionProfile, dry bool) (string, error) {
 		}
 		if sub := pick(p.Models, []string{"haiku"}, nil); sub != "" {
 			env["CLAUDE_CODE_SUBAGENT_MODEL"] = sub
+		}
+	}
+	for _, key := range blank {
+		if _, set := env[key]; !set {
+			env[key] = ""
 		}
 	}
 	root["env"] = env

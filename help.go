@@ -80,6 +80,13 @@ Lưu & đổi kết nối (profile):
   -use-profile TÊN      chuyển sang kết nối đã lưu
   -run                  mở Claude ngay sau khi xong
 
+Áp dụng cho đâu (hỏi khi chạy trong một project git):
+  -scope global         toàn máy, ghi ~/.claude/settings.json (mặc định)
+  -scope project        chỉ project đang đứng, ghi <project>/.claude/settings.local.json
+                        (git bỏ qua). Kết nối toàn máy bị che trong project đó.
+  -dir THƯ_MỤC          với -scope project: project khác thư mục đang đứng
+  Codex, Cursor, Antigravity chỉ có toàn máy.
+
 Tham số khác:
   -install-claude       tự cài Claude Code nếu máy chưa có
   -auth-header x-api-key  khi gateway đòi header x-api-key thay vì Bearer
@@ -131,6 +138,9 @@ OpenCode:
   -auth api-key -provider-id anthropic key Anthropic trực tiếp
   -auth gateway -base-url DOMAIN       gateway công ty (lấy đủ model của gateway)
   -from-profile adnx                   dùng lại gateway đã lưu cho Claude
+  -scope project [-dir THƯ_MỤC]        chỉ project này: ghi opencode.json trong project
+                                       (git bỏ qua); mặc định -scope global = toàn máy
+  Codex chỉ kết nối toàn máy (Codex bỏ qua provider trong config của project).
 
 Cursor, Antigravity, Orca tự đăng nhập trong app; configure chỉ in hướng dẫn.`
 
@@ -153,6 +163,7 @@ const helpTools = `BỘ CÔNG CỤ DÒNG LỆNH & QUẢN LÝ CỬA SỔ
   wj tools install cli               cài (hỏi chọn nhóm)
   wj tools install cli -groups 1,2,4 chọn sẵn nhóm
   wj tools install wm                quản lý cửa sổ kiểu i3
+  wj tools install wsl               WSL2 + Ubuntu, giới hạn RAM (Windows)
   wj tools uninstall cli | wm        gỡ
 
 Nhóm: 1 terminal & giao diện   2 tiện ích (rg, fd, bat, lazygit...)

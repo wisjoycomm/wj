@@ -320,10 +320,15 @@ func projectList(out io.Writer, home string) error {
 // ensureGitIgnored keeps the personal settings file out of commits. It returns
 // the .gitignore it changed, or "" when nothing was needed.
 func ensureGitIgnored(root string) (string, error) {
+	return ensureGitIgnoredEntry(root, ".claude/settings.local.json")
+}
+
+// ensureGitIgnoredEntry adds entry (a path from the repo root) to .gitignore
+// unless it, or a folder that holds it, is already listed.
+func ensureGitIgnoredEntry(root, entry string) (string, error) {
 	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
 		return "", nil
 	}
-	const entry = ".claude/settings.local.json"
 	path := filepath.Join(root, ".gitignore")
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -332,7 +337,8 @@ func ensureGitIgnored(root string) (string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line == entry || line == "/"+entry || line == ".claude/" || line == ".claude" || line == "/.claude/" || line == "/.claude" {
+		line = strings.TrimSuffix(strings.TrimPrefix(line, "/"), "/")
+		if line == entry || strings.HasPrefix(entry, line+"/") {
 			return "", nil
 		}
 	}

@@ -261,17 +261,19 @@ wj tools install cli
 wj tools install cli -groups 1,2,4
 wj tools install wm
 wj tools install wm -dry-run
+wj tools install wsl
 wj tools uninstall cli
 wj tools uninstall wm
 ```
 
 | Group | Contents |
 | --- | --- |
-| CLI 1: terminal | Starship, Nerd Font, fzf, zoxide; PowerShell 7, Windows Terminal and Clink on Windows |
+| CLI 1: terminal | Starship, Nerd Font, fzf, zoxide; Windows Terminal (opening built-in Windows PowerShell 5.1) and Clink on Windows |
 | CLI 2: utilities | ripgrep, fd, bat, eza, jq, lazygit, delta, btop, GitHub CLI |
 | CLI 3: development | Git, fnm/Node.js, uv/Python, Neovim, Antigravity IDE, optional Docker |
 | CLI 4: agents | Claude Code, Codex CLI, Antigravity CLI |
 | Window manager | Windows: Komorebi + whkd. macOS: AeroSpace. Linux: configuration for existing i3/Hyprland |
+| WSL (Windows only) | WSL2 + Ubuntu as the default distro, marked block in `~/.wslconfig` capping RAM at half the machine. Install only; Docker Desktop picks up the default distro |
 
 Availability varies by OS/package manager. Shell setup includes the original
 marked profile blocks, aliases, prompt/font, Git defaults and Node LTS setup.
@@ -411,6 +413,11 @@ Antigravity CLI has no supported custom endpoint and is reported as skipped.
 | Codex | `~/.codex/config.toml`; gateway Responses API provider and credential |
 | OpenCode | `~/.config/opencode/opencode.json` or existing `.jsonc`; provider options and models |
 | Cursor | Manual instructions for Settings > Models; no global environment writes |
+
+`-scope project` (asked by the wizard inside a git project) writes Claude to
+`<project>/.claude/settings.local.json` and OpenCode to `<project>/opencode.json`,
+both added to `.gitignore`, instead of the machine-wide files above. Codex,
+Cursor and Antigravity are machine-wide only.
 
 ## Token usage from session files
 
