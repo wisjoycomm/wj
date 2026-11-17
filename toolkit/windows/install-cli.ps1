@@ -25,7 +25,6 @@ $CLINK_FILES = @('wisjoy-starship.lua', 'wisjoy-aliases.lua')
 
 # Danh sach phan mem: Nhom, Ten hien thi, ma winget, lenh de kiem tra da co chua
 $PKGS = @(
-    @{ G = 1; Name = 'PowerShell 7';            Id = 'Microsoft.PowerShell';          Cmd = 'pwsh' },
     @{ G = 1; Name = 'Windows Terminal';        Id = 'Microsoft.WindowsTerminal';     Cmd = 'wt' },
     @{ G = 1; Name = 'Starship (prompt dep)';   Id = 'Starship.Starship';             Cmd = 'starship' },
     @{ G = 1; Name = 'Font JetBrainsMono Nerd'; Id = 'DEVCOM.JetBrainsMonoNerdFont';  Cmd = $null },
@@ -53,7 +52,7 @@ $PKGS = @(
     @{ G = 4; Name = 'Antigravity CLI (agy)';   Id = 'Google.AntigravityCLI';         Cmd = 'agy' }
 )
 $GROUPS = [ordered]@{
-    '1' = 'Terminal dep + tien: PowerShell 7, Windows Terminal, Starship, Nerd Font, Clink cho CMD, fzf, zoxide'
+    '1' = 'Terminal dep + tien: Windows Terminal (mo Windows PowerShell co san), Starship, Nerd Font, Clink cho CMD, fzf, zoxide'
     '2' = 'Tim kiem / xem file: ripgrep, fd, bat, eza, jq, lazygit, delta, btop, gh'
     '3' = 'Lap trinh backend: Git, Node (fnm), Python (uv), Neovim, Antigravity IDE, Docker (hoi rieng)'
     '4' = 'Coding agent: Claude Code, Codex CLI, Antigravity CLI (agy)'
@@ -133,7 +132,7 @@ $env:Path += ';' + (Join-Path $env:USERPROFILE '.local\bin')
 # Goi y lenh theo lich su (mui ten phai de nhan), Tab hien menu, mui ten len/xuong tim theo chu da go
 if (Get-Module -ListAvailable PSReadLine) {
     Import-Module PSReadLine -ErrorAction SilentlyContinue
-    if ((Get-Module PSReadLine).Version -ge [version]'2.2.0') {
+    if ((Get-Module PSReadLine).Version -ge [version]'2.2.0' -and -not [Console]::IsOutputRedirected) {
         Set-PSReadLineOption -PredictionSource History -PredictionViewStyle InlineView
     }
     Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
@@ -309,10 +308,10 @@ if (-not (Test-Path $ssCfg)) {
     Write-Host '   Starship: ~/.config/starship.toml (het canh bao scan_timeout)'
 }
 
-# 3. PSFzf (Ctrl+R / Ctrl+T dung fzf) cho PowerShell 7
-if ((Has fzf) -and (Has pwsh)) {
-    pwsh -NoProfile -Command "if (-not (Get-Module -ListAvailable PSFzf)) { Install-Module PSFzf -Scope CurrentUser -Force -ErrorAction Stop }" 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Host '   PSFzf: OK (Ctrl+R, Ctrl+T trong PowerShell 7)' } else { Write-Host '   PSFzf: khong cai duoc (bo qua)' -ForegroundColor Yellow }
+# 3. PSFzf (Ctrl+R / Ctrl+T dung fzf) cho Windows PowerShell
+if (Has fzf) {
+    powershell.exe -NoProfile -Command "if (-not (Get-Module -ListAvailable PSFzf)) { if (-not (Get-PackageProvider -ListAvailable NuGet -ErrorAction SilentlyContinue)) { Install-PackageProvider NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null }; Install-Module PSFzf -Scope CurrentUser -Force -ErrorAction Stop }" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Host '   PSFzf: OK (Ctrl+R, Ctrl+T)' } else { Write-Host '   PSFzf: khong cai duoc (bo qua)' -ForegroundColor Yellow }
 }
 
 # 4. CMD: Clink tu chay + Starship + alias giong PowerShell
@@ -325,7 +324,7 @@ if ($clink) {
     Write-Host '   CMD: Clink + Starship + alias (mo cua so CMD moi de thay)'
 }
 
-# 5. Windows Terminal: font Nerd Font + mo PowerShell 7 mac dinh
+# 5. Windows Terminal: font Nerd Font + mo Windows PowerShell (co san) mac dinh
 $wtFiles = @(
     (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'),
     (Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json'),
@@ -342,12 +341,13 @@ foreach ($p in $wtFiles) {
     if (-not $j.profiles.PSObject.Properties['defaults']) { $j.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([pscustomobject]@{}) }
     $font = [pscustomobject]@{ face = 'JetBrainsMono Nerd Font' }
     if ($j.profiles.defaults.PSObject.Properties['font']) { $j.profiles.defaults.font = $font } else { $j.profiles.defaults | Add-Member -NotePropertyName font -NotePropertyValue $font }
-    $pwshGuid = '{574e775e-4f2a-5b96-ac1e-a2962a402336}'
-    if (@($j.profiles.list | Where-Object { $_.guid -eq $pwshGuid }).Count -gt 0) { $j.defaultProfile = $pwshGuid }
+    # Mot bo PowerShell duy nhat: Windows PowerShell 5.1 co san, khong go duoc
+    $winPsGuid = '{61c54bbd-c2c6-5271-96e7-009a87ff44bf}'
+    if (@($j.profiles.list | Where-Object { $_.guid -eq $winPsGuid }).Count -gt 0) { $j.defaultProfile = $winPsGuid }
     [IO.File]::WriteAllText($p, ($j | ConvertTo-Json -Depth 50), $utf8)
     $wtDone = $true
 }
-if ($wtDone) { Write-Host '   Windows Terminal: font JetBrainsMono Nerd Font, mo PowerShell 7 mac dinh' }
+if ($wtDone) { Write-Host '   Windows Terminal: font JetBrainsMono Nerd Font, mo Windows PowerShell mac dinh' }
 elseif (Has wt) { Write-Host '   Windows Terminal: chua co file cai dat -> mo Windows Terminal 1 lan roi chay lai file nay' -ForegroundColor Yellow }
 
 # 6. Git

@@ -183,7 +183,7 @@ wj tools install cli
 
 | Nhom | Cong cu |
 | --- | --- |
-| 1 | Terminal, Starship, Nerd Font, fzf, zoxide; Windows co PowerShell 7, Windows Terminal, Clink |
+| 1 | Terminal, Starship, Nerd Font, fzf, zoxide; Windows co Windows Terminal (mo Windows PowerShell co san), Clink |
 | 2 | rg, fd, bat, eza, jq, lazygit, delta, btop, gh |
 | 3 | Git, fnm/Node, uv/Python, Neovim, Antigravity IDE; Docker hoi rieng |
 | 4 | Claude Code, Codex CLI, Antigravity CLI |
