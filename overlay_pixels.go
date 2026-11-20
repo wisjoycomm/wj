@@ -5,11 +5,15 @@ import "math"
 // composeOverlay turns two text renderings into premultiplied BGRA pixels, written
 // into colour. colour holds the text on black and mask the same text in white on
 // black, so the mask gives each pixel's text coverage. Only the background is see
-// through: text stays fully opaque however low bgAlpha is.
-func composeOverlay(colour, mask []byte, width, height, radius int, bg [3]byte, bgAlpha byte) {
+// through: text stays fully opaque however low bgAlpha is. Within halo pixels of the
+// text the background is at least haloAlpha opaque, so text stays readable on a
+// see-through background; haloAlpha 0 turns that off.
+func composeOverlay(colour, mask []byte, width, height, radius int, bg [3]byte, bgAlpha, haloAlpha byte, halo int) {
+	near := textHalo(mask, width, height, halo)
 	for y := range height {
 		for x := range width {
 			i := (y*width + x) * 4
+			bgAlpha := max(bgAlpha, byte(int(haloAlpha)*int(near[y*width+x])/255))
 			rest := 255 - int(mask[i+1])
 			alpha := int(bgAlpha)*rest/255 + int(mask[i+1])
 			edge := cornerCoverage(x, y, width, height, radius)
@@ -20,6 +24,35 @@ func composeOverlay(colour, mask []byte, width, height, radius int, bg [3]byte, 
 			colour[i+3] = byte(float64(alpha) * edge)
 		}
 	}
+}
+
+// textHalo is, per pixel, the strongest text coverage within halo pixels (a square).
+func textHalo(mask []byte, width, height, halo int) []byte {
+	near := make([]byte, width*height)
+	if halo <= 0 {
+		return near
+	}
+	// Two passes, rows then columns, so a wide halo stays cheap.
+	rows := make([]byte, width*height)
+	for y := range height {
+		for x := range width {
+			best := byte(0)
+			for dx := max(0, x-halo); dx <= min(width-1, x+halo); dx++ {
+				best = max(best, mask[(y*width+dx)*4+1])
+			}
+			rows[y*width+x] = best
+		}
+	}
+	for y := range height {
+		for x := range width {
+			best := byte(0)
+			for dy := max(0, y-halo); dy <= min(height-1, y+halo); dy++ {
+				best = max(best, rows[dy*width+x])
+			}
+			near[y*width+x] = best
+		}
+	}
+	return near
 }
 
 // composeBorder draws a thin border along the rounded edge of already composed

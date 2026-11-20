@@ -134,7 +134,7 @@ func applyClaudeFile(path string, p connectionProfile, dry bool, blank []string)
 		if model != "" {
 			root["model"] = model
 		}
-		if sub := pick(p.Models, []string{"haiku"}, nil); sub != "" {
+		if sub := newestModel(claudeIDs(p.Models), "haiku"); sub != "" {
 			env["CLAUDE_CODE_SUBAGENT_MODEL"] = sub
 		}
 	}

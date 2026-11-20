@@ -3,6 +3,21 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.14
+- `wj models` moves Opus, Sonnet, Haiku, Fable and the subagent model to the newest Claude the gateway lists, once
+  it answers, and says what moved. A default you picked by hand stays. `wj configure` now picks the newest Haiku
+  for subagents (it took the first one listed).
+- Overlay shows money next to tokens: `131.2M = 50.62$` for the period and `47.0M  18.23$` per project (API list
+  prices). The word "hôm nay" is gone from the header; week and month still say so.
+- Overlay background is half see-through by default (50%, was 92%), with a darker halo right around the text so it
+  stays readable. `wj overlay -opacity 35` sets it (20-100), even on an open overlay, and remembers it. The menu
+  has 20, 35, 50, 65, 80, 100%.
+- Compact overlay is shorter: the chart shows the last 7 days (or 7 weeks, 7 months), and the header only the 7-day
+  total. The 30-day and all-time totals are in the expanded view.
+- Overlay limits: one line each for the running 5-hour block (with the time left) and the last 7 days, as
+  used/limit and percent, yellow from 80%, red when over. By default the limit is your own record (largest block,
+  largest week); `wj overlay -limit-5h 20M -limit-week 500M` sets numbers, `off` hides a line.
+
 ## 0.2.13
 - Overlay: a small column chart under the total, like `wj usage` (days, weeks or months, the current one in
   colour), and a bar under each project for its share of the total.

@@ -7,7 +7,7 @@ func TestComposeOverlayKeepsTextOpaqueOverSeeThroughBackground(t *testing.T) {
 	// Three pixels in a row: background only, solid text, half covered text.
 	colour := []byte{0, 0, 0, 0, 200, 200, 200, 0, 100, 100, 100, 0}
 	mask := []byte{0, 0, 0, 0, 255, 255, 255, 0, 128, 128, 128, 0}
-	composeOverlay(colour, mask, 3, 1, 0, bg, 128)
+	composeOverlay(colour, mask, 3, 1, 0, bg, 128, 0, 0)
 	if colour[3] != 128 || colour[0] != 50 {
 		t.Errorf("background pixel = %v", colour[:4])
 	}
@@ -16,6 +16,27 @@ func TestComposeOverlayKeepsTextOpaqueOverSeeThroughBackground(t *testing.T) {
 	}
 	if colour[11] <= 128 || colour[8] > colour[11] {
 		t.Errorf("edge pixel not valid premultiplied: %v", colour[8:12])
+	}
+}
+
+// A see-through background gets darker only right around the text.
+func TestComposeOverlayDarkensAHaloAroundText(t *testing.T) {
+	bg := [3]byte{100, 100, 100}
+	// Five pixels in a row: text in the middle.
+	colour := make([]byte, 5*4)
+	mask := make([]byte, 5*4)
+	for c := range 3 {
+		colour[8+c], mask[8+c] = 255, 255
+	}
+	composeOverlay(colour, mask, 5, 1, 0, bg, 50, 200, 1)
+	if colour[3] != 50 || colour[19] != 50 {
+		t.Errorf("far from text the background keeps its alpha: %d, %d", colour[3], colour[19])
+	}
+	if colour[7] != 200 || colour[15] != 200 {
+		t.Errorf("next to text the background is darker: %d, %d", colour[7], colour[15])
+	}
+	if colour[11] != 255 {
+		t.Errorf("text stays opaque: %d", colour[11])
 	}
 }
 

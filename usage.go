@@ -859,11 +859,11 @@ func (s *sessionScanner) machineTotals(now time.Time) string {
 		compactTokens(day.Total), compactTokens(week.Total), compactTokens(month.Total), compactTokens(all.Total))
 }
 
-// overlayFooter is the machine total for the longer windows.
+// overlayFooter is the machine total for the last 7 days. The expanded overlay
+// shows the longer windows.
 func (s *sessionScanner) overlayFooter(now time.Time) string {
 	_, week := s.summarize(usageFilter{Since: now.Add(-7 * 24 * time.Hour)})
-	_, month := s.summarize(usageFilter{Since: now.Add(-30 * 24 * time.Hour)})
-	return fmt.Sprintf("7d %s · 30d %s", compactTokens(week.Total), compactTokens(month.Total))
+	return "7d " + compactTokens(week.Total)
 }
 
 // windowTag is the shortest label for a time window, for the overlay's one-line header.

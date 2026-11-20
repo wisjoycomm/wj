@@ -92,6 +92,68 @@ func setClaudePicker(root map[string]any, conn connectionProfile, ids []string, 
 	return len(rows), dropped
 }
 
+// claudeTierKeys are the Claude Code settings that pin a family to one gateway id.
+// The aliases opus, sonnet, haiku and fable, and the subagents, follow them.
+var claudeTierKeys = []struct{ key, family string }{
+	{"ANTHROPIC_DEFAULT_OPUS_MODEL", "opus"},
+	{"ANTHROPIC_DEFAULT_SONNET_MODEL", "sonnet"},
+	{"ANTHROPIC_DEFAULT_HAIKU_MODEL", "haiku"},
+	{"ANTHROPIC_DEFAULT_FABLE_MODEL", "fable"},
+	{"CLAUDE_CODE_SUBAGENT_MODEL", "haiku"},
+}
+
+// upgradeClaudeTiers moves each pinned family to the newest id of that family the
+// gateway lists, once it answers through /v1/messages. A default model that was
+// the old pin moves with it; one the user picked by hand stays. It returns a line
+// per change, "cc/claude-opus-5-5 → cc/claude-opus-5-6".
+func upgradeClaudeTiers(root, env map[string]any, conn connectionProfile, ids []string) []string {
+	wanted := map[string]string{} // old id -> newest of its family
+	var candidates []string
+	for _, tier := range claudeTierKeys {
+		old, _ := env[tier.key].(string)
+		newest := newestModel(claudeIDs(ids), tier.family)
+		if old == "" || newest == "" || old == newest || !newerModel(newest, old) {
+			continue
+		}
+		wanted[old] = newest
+		if !contains(candidates, newest) {
+			candidates = append(candidates, newest)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	working := verifyClaudeModels(conn, candidates)
+	var changes []string
+	for _, tier := range claudeTierKeys {
+		old, _ := env[tier.key].(string)
+		newest, ok := wanted[old]
+		if !ok || !contains(working, newest) {
+			continue
+		}
+		env[tier.key] = newest
+		line := old + " → " + newest
+		if !contains(changes, line) {
+			changes = append(changes, line)
+		}
+	}
+	if current, _ := root["model"].(string); wanted[current] != "" && contains(working, wanted[current]) {
+		root["model"] = wanted[current]
+	}
+	return changes
+}
+
+// claudeIDs keeps the ids Claude Code itself lists: those naming Claude.
+func claudeIDs(ids []string) []string {
+	var kept []string
+	for _, id := range ids {
+		if low := strings.ToLower(id); strings.Contains(low, "claude") || strings.Contains(low, "anthropic") {
+			kept = append(kept, id)
+		}
+	}
+	return kept
+}
+
 // pickerModelIDs lists the models setClaudePicker put in /model.
 func pickerModelIDs(root map[string]any) []string {
 	picker, _ := root["modelPicker"].(map[string]any)
@@ -153,6 +215,7 @@ func claudeTarget(home string) *modelTarget {
 	conn.NeutralHeaders = env["ANTHROPIC_CUSTOM_HEADERS"] == neutralHeaders
 	return &modelTarget{"claude", conn, func(ids []string) (string, error) {
 		added, dropped := setClaudePicker(root, conn, ids, true)
+		upgraded := upgradeClaudeTiers(root, env, conn, ids)
 		data, err := json.MarshalIndent(root, "", "  ")
 		if err != nil {
 			return "", err
@@ -163,6 +226,9 @@ func claudeTarget(home string) *modelTarget {
 		line := fmt.Sprintf("%d model; Claude tự hiện model Claude, thêm %d model khác đã thử chạy được vào /model", len(ids), added)
 		if dropped > 0 {
 			line += fmt.Sprintf("; bỏ %d model không chạy qua Claude Code", dropped)
+		}
+		for _, change := range upgraded {
+			line += "\n  lên bản mới: " + change
 		}
 		return line, nil
 	}}

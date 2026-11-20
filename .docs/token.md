@@ -197,14 +197,46 @@ Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi 
 xem, giống `wj usage`: hôm nay (mặc định), tuần này (từ thứ Hai) hoặc tháng này, theo ngày dương lịch của máy chứ
 không phải 24 giờ gần nhất. Vì vậy số trên overlay khớp với `wj usage today`, `week`, `month`.
 
-Dưới dòng tổng là biểu đồ cột giống `wj usage`, thu nhỏ, không có nhãn: mỗi cột là một ngày (kỳ hôm nay, tối đa 14
-ngày), một tuần (kỳ tuần, tối đa 12 tuần) hoặc một tháng (kỳ tháng, tối đa 12 tháng). Cột cuối bên phải là kỳ hiện
+Dưới dòng tổng là biểu đồ cột giống `wj usage`, thu nhỏ, không có nhãn, 7 cột:
+7 ngày gần nhất (kỳ hôm nay), 7 tuần (kỳ tuần) hoặc 7 tháng (kỳ tháng). Xem dài hơn thì dùng `wj usage`.
+Dòng tổng chỉ ghi thêm tổng 7 ngày (`7d`); tổng 30 ngày và toàn bộ nằm ở dạng mở rộng. Cột cuối bên phải là kỳ hiện
 tại, màu xanh lá (vàng hay đỏ khi gần hoặc vượt `-warn`). Dưới tên mỗi project có một thanh xanh dương: phần của
 project đó trong tổng của kỳ.
 
-Nền overlay gần đục (mặc định 92%) để chữ đọc rõ trên mọi nền, có viền mỏng. Chữ luôn đặc hoàn toàn.
-Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề; các model thụt vào dưới project.
-Muốn thấy phần bên dưới thì chỉnh độ trong suốt (xem "Menu chuột phải").
+Dòng tổng ở kỳ hôm nay không ghi chữ "hôm nay" (cột xanh của biểu đồ đã cho biết); kỳ tuần hay tháng thì có chữ.
+Cạnh số token là số tiền quy đổi theo giá API niêm yết (xem dưới): `131.2M = 50.62$` cho cả kỳ, và `47.0M  18.23$`
+ở cuối dòng mỗi project.
+
+**Hạn mức.** Dưới biểu đồ, mỗi hạn mức một dòng, có thanh bên dưới:
+
+```
+5h 131.2M/701.8M · 18% · còn 2h07
+tuần 1.7B/6.1B · 28%
+```
+
+- `5h`: token của block 5 giờ đang chạy / hạn mức, phần trăm, và còn bao lâu tới khi block hết. Block tính như gói
+  Claude: bắt đầu từ giờ tròn của lượt gọi đầu, dài 5 giờ (giống `wj usage -blocks`).
+- `tuần`: token của 7 ngày gần nhất / hạn mức. Cùng số với `7d` trên dòng tổng.
+- Chữ và thanh chuyển vàng từ 80%, đỏ khi vượt.
+
+Mặc định (chưa đặt gì) hạn mức là `max`, tức kỷ lục của chính bạn: block 5 giờ lớn nhất trong 30 ngày qua, và 7 ngày
+lớn nhất trong 12 tuần trước. Đổi hay tắt:
+
+```
+wj overlay -limit-5h 20M -limit-week 500M   # số token cụ thể (được nhớ; overlay đang mở đổi ngay)
+wj overlay -limit-week max                  # về lại kỷ lục của bạn
+wj overlay -limit-5h off                    # ẩn một dòng
+```
+
+`wj` không đọc được hạn mức thật của gói Claude hay gateway, nên con số là kỷ lục của bạn hoặc số bạn tự đặt. Tính cả
+token cache, như mọi số khác của overlay.
+
+Nền overlay nửa trong (mặc định 50%): thấy được cửa sổ phía sau. Chữ luôn đặc hoàn toàn, và nền ngay quanh chữ tự đậm
+hơn để chữ vẫn đọc rõ trên nền sáng. Có viền mỏng. Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề;
+các model thụt vào dưới project.
+
+Đổi độ đục nền: chuột phải → Độ trong suốt, hoặc `wj overlay -opacity 35` (20 đến 100; overlay đang mở đổi ngay,
+và số này được nhớ cho lần sau).
 
 Bấm đúp vào overlay (hoặc chuột phải, chọn Mở rộng) để xem báo cáo: app, lần dùng gần nhất,
 model, token vào, ra, cache và số tiền quy đổi của từng project, thêm cả project đã đóng trong
@@ -232,7 +264,8 @@ Chuột phải vào overlay mở menu:
 
 - **Mở rộng / Thu gọn (bấm đúp)**: như bấm đúp.
 - **Kỳ (như wj usage)**: hôm nay, tuần này, tháng này. Đổi kỳ đang xem, không cần mở lại.
-- **Độ trong suốt**: đặt độ đục của nền 40%, 60%, 80%, 92%, 100% (mặc định 92%; 100% là nền đặc, không thấy phần bên dưới).
+- **Độ trong suốt**: đặt độ đục của nền 20%, 35%, 50%, 65%, 80%, 100% (mặc định 50%; 100% là nền đặc, không thấy phần
+  bên dưới). Ai đang để 92%, mặc định cũ, được chuyển sang 50%.
 - **Cỡ chữ**: 85%, 100%, 125%, 150% (mặc định 100%).
 - **Đóng overlay**.
 
