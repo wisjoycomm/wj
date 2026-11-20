@@ -4,6 +4,8 @@ What changed for your projects and for you, newest first, a few lines per versio
 newer than the kit a project was set up with.
 
 ## 0.2.13
+- Overlay: a small column chart under the total, like `wj usage` (days, weeks or months, the current one in
+  colour), and a bar under each project for its share of the total.
 - `wj init` on a project from an older kit that still has `scripts/` or `docs/`: Claude Code moves them to
   `.tools/` and `.docs/` and fixes every path that points at them. Files a build, CI or docs site uses stay put.
   It prints what moved where; you review and commit.
