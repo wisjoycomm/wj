@@ -22,6 +22,15 @@
       "Bash(git push *)"
     ],
     "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.docker/**)",
+      "Read(~/.netrc)",
+      "Read(~/.npmrc)",
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
       "Bash(git clean *)"
