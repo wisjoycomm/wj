@@ -316,10 +316,10 @@ func runOverlay(args []string, out io.Writer, home string) error {
 	overlayOpacityFlag = *opacity
 	limitsSet := false
 	flags.Visit(func(f *flag.Flag) { limitsSet = limitsSet || f.Name == "limit-5h" || f.Name == "limit-week" })
-	if err := checkOverlayLimit(*limit5h, true); err != nil {
+	if err := checkOverlayLimit(*limit5h); err != nil {
 		return fmt.Errorf("-limit-5h: %w", err)
 	}
-	if err := checkOverlayLimit(*limitWeek, false); err != nil {
+	if err := checkOverlayLimit(*limitWeek); err != nil {
 		return fmt.Errorf("-limit-week: %w", err)
 	}
 	if limitsSet {
@@ -500,14 +500,14 @@ func overlayFeed(home string, hwnd uintptr) {
 		scanner.scan(time.Time{})
 		list, total := scanner.projectStatus(since)
 		now := time.Now()
-		footer := "≈" + costText(total) + " · " + scanner.overlayFooter(now)
+		footer := "= " + moneyText(total) + " · " + scanner.overlayFooter(now)
 		running := runningProjects(list, scanner.openClaudeProjects(), now)
 		lines := make([]overlayLine, 0, len(running)+1)
 		if len(running) == 0 {
 			lines = append(lines, overlayLine{Project: "Không có project đang chạy"})
 		}
 		for _, row := range running {
-			lines = append(lines, overlayLine{Project: cutRunes(row.Project, 18), Tokens: compactTokens(row.Total), Active: now.Sub(row.Last) < activeWindow, Total: row.Total, Cost: "≈" + costText(row)})
+			lines = append(lines, overlayLine{Project: cutRunes(row.Project, 18), Tokens: compactTokens(row.Total), Active: now.Sub(row.Last) < activeWindow, Total: row.Total, Cost: moneyText(row)})
 		}
 		var detail []overlayLine
 		for _, entry := range detailEntries(overlayDetailRows(running, list), scanner.modelsByProject(since), overlayMaxLines) {
@@ -733,11 +733,13 @@ func (o *overlayView) px(v int) int32 { return int32(float64(v) * o.scale) }
 
 func limitBarHeight() int32 { return overlay.px(3) }
 
-// limitSegment is where limit i of n sits in the limit row: its left edge and width.
-func limitSegment(l overlayLayout, i, n int) (x, width int32) {
-	width = (l.width - l.pad*2 - l.gap*int32(n-1)) / int32(n)
-	return l.pad + int32(i)*(width+l.gap), width
+// limitLine is the height of one limit: its text, then its bar.
+func limitLine(textHeight int32) int32 {
+	return textHeight + overlay.px(2) + limitBarHeight() + overlay.px(4)
 }
+
+// limitTop is the top of limit i: each limit has a line of its own.
+func limitTop(l overlayLayout, i int) int32 { return l.limitsTop + int32(i)*limitLine(l.limitsText) }
 
 func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	selectObject.Call(hdc, overlay.font)
@@ -769,7 +771,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	}
 	if len(f.limits) > 0 {
 		l.limitsTop, l.limitsText = l.pad+l.headerHeight, textHeight
-		l.headerHeight += textHeight + overlay.px(2) + limitBarHeight() + overlay.px(5)
+		l.headerHeight += int32(len(f.limits))*limitLine(textHeight) + overlay.px(1)
 	}
 	if !f.expanded {
 		l.shareHeight = overlay.px(2)
@@ -792,21 +794,16 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 		content += width
 	}
 	selectObject.Call(hdc, overlay.bold)
-	titleWidth, _ := textWidth(hdc, f.title+" ")
+	titleWidth, _ := textWidth(hdc, overlayTitle(f.title))
 	selectObject.Call(hdc, overlay.big)
 	totalWidth, _ := textWidth(hdc, f.total)
 	headerWidth := titleWidth + totalWidth
 	selectObject.Call(hdc, overlay.font)
-	footerWidth, _ := textWidth(hdc, " · "+f.footer)
+	footerWidth, _ := textWidth(hdc, " "+f.footer)
 	minimum := headerWidth + footerWidth
-	if n := int32(len(f.limits)); n > 0 {
-		// every segment as wide as the widest text, so the bars line up
-		var widest int32
-		for _, limit := range f.limits {
-			w, _ := textWidth(hdc, limit.text(time.Now()))
-			widest = max(widest, w)
-		}
-		minimum = max(minimum, widest*n+l.gap*(n-1))
+	for _, limit := range f.limits {
+		w, _ := textWidth(hdc, limit.text(time.Now()))
+		minimum = max(minimum, w)
 	}
 	if f.expanded {
 		selectObject.Call(hdc, overlay.bold)
@@ -883,10 +880,9 @@ func overlayRender(hwnd uintptr) {
 			f.series, pastColumnPixel, barPixels[f.warnLevel], borderPixel)
 	}
 	for i, limit := range f.limits {
-		x, segment := limitSegment(l, i, len(f.limits))
-		y := int(l.limitsTop + l.limitsText + overlay.px(2))
-		composeBar(colour, width, height, int(x), y, int(segment), int(limitBarHeight()),
-			barFill(limit.Used, limit.Limit, int(segment)), borderPixel, barPixels[limit.level()])
+		y := int(limitTop(l, i) + l.limitsText + overlay.px(2))
+		composeBar(colour, width, height, pad, y, width-pad*2, int(limitBarHeight()),
+			barFill(limit.Used, limit.Limit, width-pad*2), borderPixel, barPixels[limit.level()])
 	}
 	if l.shareHeight > 0 {
 		// each project's share of the period's total, under its row
@@ -995,15 +991,16 @@ func overlaySavePosition(hwnd uintptr) {
 }
 
 // overlaySaveLimits writes the limits given on the command line into overlay.json,
-// keeping everything else in it. "off" clears a limit; a flag not given keeps it.
+// keeping everything else in it. "off" is kept as such (nothing saved means "max");
+// a flag not given keeps its limit.
 func overlaySaveLimits(path string, flags *flag.FlagSet, limit5h, limitWeek string) error {
 	var saved overlaySettings
 	if data, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(data, &saved)
 	}
 	clean := func(text string) string {
-		if t := strings.ToLower(strings.TrimSpace(text)); t == "off" || t == "0" {
-			return ""
+		if t := strings.ToLower(strings.TrimSpace(text)); t == "off" || t == "0" || t == "" {
+			return "off"
 		}
 		return strings.TrimSpace(text)
 	}
@@ -1038,20 +1035,21 @@ func overlayDraw(hdc uintptr, l overlayLayout, f overlayFrame, asMask bool) {
 	}
 	y := l.pad
 	selectObject.Call(hdc, overlay.bold)
-	title := f.title + " "
+	title := overlayTitle(f.title)
 	titleWidth, titleHeight := textWidth(hdc, title)
-	drawText(hdc, l.pad, y+l.headerBase-titleHeight, title, paint(textColor))
+	if title != "" {
+		drawText(hdc, l.pad, y+l.headerBase-titleHeight, title, paint(textColor))
+	}
 	selectObject.Call(hdc, overlay.big)
 	totalWidth, _ := textWidth(hdc, f.total)
 	drawText(hdc, l.pad+titleWidth, y, f.total, paint([]uint32{textColor, warnColor, overColor}[f.warnLevel]))
 	selectObject.Call(hdc, overlay.font)
-	footer := " · " + f.footer
+	footer := " " + f.footer
 	_, footerHeight := textWidth(hdc, footer)
 	drawText(hdc, l.pad+titleWidth+totalWidth, y+l.headerBase-footerHeight, footer, paint(mutedColor))
 	now := time.Now()
 	for i, limit := range f.limits {
-		x, _ := limitSegment(l, i, len(f.limits))
-		drawText(hdc, x, l.limitsTop, limit.text(now), paint([]uint32{mutedColor, warnColor, overColor}[limit.level()]))
+		drawText(hdc, l.pad, limitTop(l, i), limit.text(now), paint([]uint32{mutedColor, warnColor, overColor}[limit.level()]))
 	}
 	y += l.headerHeight - l.rowHeight
 	firstNumber := 1

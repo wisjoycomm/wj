@@ -17,7 +17,13 @@ Gateway vừa thêm model thì chạy:
 wj models
 ```
 
-Lệnh dùng key đã lưu trong từng app, giữ nguyên model mặc định, và không hỏi lại key.
+Lệnh dùng key đã lưu trong từng app và không hỏi lại key.
+
+**Gateway có bản Claude mới** (vd thêm `cc/claude-opus-5-6` khi đang dùng `cc/claude-opus-5-5`): `wj models` chuyển
+Opus, Sonnet, Haiku, Fable và model của subagent sang bản mới nhất của từng dòng, sau khi thử thấy bản đó chạy qua
+Claude Code. Model mặc định đang là bản cũ thì cũng chuyển theo; model bạn tự chọn (vd một model GPT) giữ nguyên.
+Tool in từng thay đổi: `lên bản mới: cc/claude-opus-5-5 → cc/claude-opus-5-6`. Bản mới chưa chạy được thì giữ bản
+cũ. Codex và OpenCode: danh sách được cập nhật, model mặc định giữ nguyên.
 
 ## Claude chạy được là ưu tiên
 

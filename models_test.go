@@ -121,6 +121,53 @@ func TestModelsRefreshKeepsChoicesAndHidesKey(t *testing.T) {
 	}
 }
 
+// A gateway that adds a newer Claude: wj models moves the pinned families to it,
+// and the default when it was the old pin; a hand-picked default stays.
+func TestModelsRefreshMovesPinnedFamiliesToTheNewestClaude(t *testing.T) {
+	server := fakeGateway(t)
+	home := connectedHome(t, server.URL)
+	settings, _ := json.Marshal(map[string]any{"model": "cc/claude-opus-8", "env": map[string]any{
+		"ANTHROPIC_BASE_URL": server.URL, "ANTHROPIC_AUTH_TOKEN": testKey,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL": "cc/claude-opus-8", "ANTHROPIC_DEFAULT_SONNET_MODEL": "cc/claude-sonnet-8",
+	}})
+	writeTestFile(t, claudeSettingsPath(home), string(settings))
+	var out bytes.Buffer
+	if err := runModels(nil, strings.NewReader(""), &out, home); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Model string
+		Env   map[string]string
+	}
+	if err := json.Unmarshal([]byte(readText(t, claudeSettingsPath(home))), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Env["ANTHROPIC_DEFAULT_OPUS_MODEL"] != "cc/claude-opus-9" || got.Model != "cc/claude-opus-9" {
+		t.Errorf("opus not moved to 9: %+v", got)
+	}
+	if got.Env["ANTHROPIC_DEFAULT_SONNET_MODEL"] != "cc/claude-sonnet-8" {
+		t.Errorf("no newer sonnet listed, the pin stays: %+v", got.Env)
+	}
+	if !strings.Contains(out.String(), "cc/claude-opus-8 → cc/claude-opus-9") {
+		t.Errorf("output must say what moved:\n%s", out.String())
+	}
+}
+
+func TestUpgradeClaudeTiersKeepsAHandPickedDefaultAndANewerPin(t *testing.T) {
+	old := verifyClaudeModels
+	verifyClaudeModels = func(_ connectionProfile, ids []string) []string { return ids }
+	t.Cleanup(func() { verifyClaudeModels = old })
+	root := map[string]any{"model": "cx/gpt-9"}
+	env := map[string]any{"ANTHROPIC_DEFAULT_HAIKU_MODEL": "cc/claude-haiku-5-5", "CLAUDE_CODE_SUBAGENT_MODEL": "cc/claude-haiku-4-5-20251001"}
+	changes := upgradeClaudeTiers(root, env, connectionProfile{}, []string{"cc/claude-haiku-5-5", "cc/claude-haiku-4-5-20251001", "haiku-x"})
+	if env["CLAUDE_CODE_SUBAGENT_MODEL"] != "cc/claude-haiku-5-5" || env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] != "cc/claude-haiku-5-5" {
+		t.Errorf("env = %v", env)
+	}
+	if root["model"] != "cx/gpt-9" || len(changes) != 1 {
+		t.Errorf("model = %v, changes = %v", root["model"], changes)
+	}
+}
+
 func TestModelsRefreshKeepsOpenCodeDefault(t *testing.T) {
 	server := fakeGateway(t)
 	home := connectedHome(t, server.URL)
