@@ -10,7 +10,7 @@ import (
 )
 
 // List prices, for the "what would this cost on the API" column. prices.json is a
-// snapshot of OpenRouter's public list (scripts/update-prices.sh), embedded so the
+// snapshot of OpenRouter's public list (.tools/update-prices.sh), embedded so the
 // token commands stay offline. It ships with each release.
 //
 //go:embed prices.json

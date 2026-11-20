@@ -3,6 +3,11 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.12
+- Rules: scripts to reuse go in `.tools/` and docs in `.docs/` (was `scripts/` and `docs/`), so they sort first.
+  Move an existing `scripts/` or `docs/` folder yourself if you want it to match.
+- wj repo: `.tools/release.sh` and `/release` do a whole release in one command (`.docs/release.md`).
+
 ## 0.2.11
 - Agents never run `wj`: skills, worker and rules do every step by hand. `wj` is the tool you run.
 - `wj init` merges a file that differs from the kit with Claude Code instead of keeping or replacing it (old file

@@ -193,7 +193,7 @@ func checkFixedContext(env doctorEnv) []doctorFinding {
 				compactTokens(int64(total)), compactTokens(fixedRulesBudget), root),
 			Detail: "Mọi lượt của mọi phiên và mọi worker đều gửi lại phần này.\n" + largest(ctx.rules, 6),
 			Fix: "chạy /orca-dream để xoá rule và bài học cũ; phần chỉ vài task cần thì chuyển thành skill " +
-				"hoặc file trong docs/ (chỉ nạp khi dùng tới)",
+				"hoặc file trong .docs/ (chỉ nạp khi dùng tới)",
 		})
 	}
 	if total := sumTokens(ctx.list); total > fixedListBudget {

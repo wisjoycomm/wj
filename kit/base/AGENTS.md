@@ -22,7 +22,7 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - Temp and scratch files (logs, test output, one-off scripts, downloads) go in `.tmp/<task or topic>/` at the repo root, which is gitignored: one folder per task, so it can be found and removed as a whole. Never use another folder (`.temp/`, `tmp/`), the repo root or a place next to source files.
 - Before you report a task done, delete its folder in `.tmp/`. Keep only what the next step needs, and name it in your report.
 - Don't write summary or report files (`SUMMARY.md`, `CHANGES.md`, `NOTES.md`...) after a task: report in chat instead.
-- Write docs only when asked, in `docs/`. When you change behavior that a file in `docs/` describes, update that file in the same change.
+- Write docs only when asked, in `.docs/`. When you change behavior that a file in `.docs/` describes, update that file in the same change.
 
 ## Commands
 - Non-interactive only: no `git rebase -i`, no `git commit` without `-m`, no pagers, editors or pickers (`less`, `vim`, `fzf`, `lazygit`), and no `gh` command that would prompt (pass all flags).
@@ -36,8 +36,8 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - A claim from a file, a command output, a doc or a web page gets its source: `path:line`, the command you ran, or the URL. A claim from memory is marked as such.
 
 ## Reuse, don't repeat
-- When a job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), even a one-step one, turn it into a script in `scripts/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does.
-- Then add a short skill `.claude/skills/<job>/SKILL.md`: when to use it, the exact command, and how to read its output. Before a job, check `scripts/` and the skills for one that already does it, and fix that script rather than writing a second one.
+- When a job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), even a one-step one, turn it into a script in `.tools/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does.
+- Then add a short skill `.claude/skills/<job>/SKILL.md`: when to use it, the exact command, and how to read its output. Before a job, check `.tools/` and the skills for one that already does it, and fix that script rather than writing a second one. `.tools/` and `.docs/` start with a dot so they sort first; some searches skip dot folders, so list them by path.
 - Say in your report which script and skill you added or changed.
 
 ## Stop after 3 failures
