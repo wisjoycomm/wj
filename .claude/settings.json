@@ -19,8 +19,6 @@
   },
   "permissions": {
     "allow": [
-      "Bash(wj plan *)",
-      "Bash(wj verify *)",
       "Bash(git status)",
       "Bash(git status *)",
       "Bash(git diff)",
@@ -43,10 +41,8 @@
       "Bash(orca orchestration worker-start *)",
       "Bash(orca orchestration check *)",
       "Bash(orca orchestration worker-list *)",
-      "Bash(wj digest *)",
       "Bash(git add *)",
-      "Bash(git commit *)",
-      "Bash(wj trash *)"
+      "Bash(git commit *)"
     ],
     "ask": [
       "Bash(git push)",

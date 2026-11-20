@@ -98,7 +98,8 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	flags.SetOutput(out)
 	types := flags.String("type", "", "loại job, vd unity hoặc web,go (bỏ trống thì tool hỏi)")
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
-	update := flags.Bool("update", false, "thay skill Orca cũ trong project bằng bản của kit (bản cũ sao lưu .bak)")
+	update := flags.Bool("update", false, "lấy bản kit mới: file khác bản kit được Claude Code gộp vào (bản cũ sao lưu .bak), xoá file kit cũ")
+	noMerge := flags.Bool("no-merge", false, "không nhờ Claude Code gộp: file đã có và khác bản kit giữ nguyên")
 	lite := flags.Bool("lite", false, "chỉ cài phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook)")
 	remove := flags.Bool("remove", false, "gỡ kit khỏi project: chỉ phần của wj, file bạn đã sửa giữ nguyên (vào thùng rác)")
 	if err := flags.Parse(args); err != nil {
@@ -129,11 +130,29 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if !*noMerge {
+		if *dry {
+			initMergePreview = true
+		} else {
+			initMerger = newInitMerger(out)
+		}
+		defer func() { initMerger, initMergePreview = nil, false }()
+	}
 	changes, err := planInit(root, stacks, *update, *lite)
 	if err != nil {
 		return err
 	}
-	return applyInit(root, stacks, changes, *dry, *lite, out)
+	oldKit, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(kitVersionFile)))
+	if err := applyInit(root, stacks, changes, *dry, *lite, out); err != nil {
+		return err
+	}
+	if !*dry {
+		printProjectMap(out, root)
+		if news := changesSince(changelogText, strings.TrimSpace(string(oldKit)), strings.TrimSpace(buildVersion)); news != "" {
+			fmt.Fprintf(out, "\nKit đổi gì từ wj %s (CHANGELOG.md):\n%s\n", strings.TrimSpace(string(oldKit)), news)
+		}
+	}
+	return nil
 }
 
 // initMenu is the numbered-menu entry: it opens from anywhere, so ask where.
@@ -194,6 +213,8 @@ func detectStacks(root string) []string {
 
 func planInit(root string, stacks []string, update, lite bool) ([]initChange, error) {
 	var changes []initChange
+	initMergeState = loadMergedKits(root)
+	defer func() { initMergeState = nil }()
 	for _, layer := range kitLayers(lite) {
 		copied, err := planLayer(root, layer, update, kitOverrides(stacks))
 		if err != nil {
@@ -228,6 +249,9 @@ func planInit(root string, stacks []string, update, lite bool) ([]initChange, er
 		}
 		changes = append(changes, change)
 	}
+	if change, ok := initMergeState.change(); ok {
+		changes = append(changes, change)
+	}
 	// The skills read the version file, so a lite kit has no use for it.
 	if change, ok := planKitVersion(root, update); ok && !lite {
 		changes = append(changes, change)
@@ -236,14 +260,13 @@ func planInit(root string, stacks []string, update, lite bool) ([]initChange, er
 	return append(changes, old...), nil
 }
 
-// kitVersionFile records the wj version that installed the kit. The skills
-// read it: a wj older than this number may lack a command they call, so they
-// fall back to doing the step by hand.
+// kitVersionFile records the wj version of the kit the project is on. wj init
+// shows the CHANGELOG.md entries newer than it.
 const kitVersionFile = ".claude/wj-kit"
 
-// planKitVersion writes the running wj's version to kitVersionFile: on first
-// install, and on -update. A dev build (no version) writes nothing.
-func planKitVersion(root string, update bool) (initChange, bool) {
+// planKitVersion writes the running wj's version to kitVersionFile. A dev build (no
+// version) writes nothing.
+func planKitVersion(root string, _ bool) (initChange, bool) {
 	version := strings.TrimSpace(buildVersion)
 	if version == "" {
 		return initChange{}, false
@@ -257,10 +280,9 @@ func planKitVersion(root string, update bool) (initChange, bool) {
 		return initChange{}, false
 	case strings.TrimSpace(string(old)) == version:
 		return initChange{path: path, status: "đã đúng"}, true
-	case update:
-		return initChange{path: path, text: version + "\n", write: true, status: "cập nhật (wj " + version + ")"}, true
 	}
-	return initChange{path: path, status: "giữ nguyên (kit từ wj " + strings.TrimSpace(string(old)) + ") - lấy bản mới: wj init -update"}, true
+	// Every run merges the current kit in, so the project is on this version now.
+	return initChange{path: path, text: version + "\n", write: true, status: "cập nhật (wj " + strings.TrimSpace(string(old)) + " -> " + version + ")"}, true
 }
 
 // addToWjBlock appends lines to the file's "# wj init" block, so running init
@@ -320,13 +342,10 @@ func planLayer(root, layer string, update bool, overrides map[string]string) ([]
 		if err != nil {
 			return err
 		}
-		// The Orca skills are wj's own files: an older copy can be replaced on request.
-		if strings.HasPrefix(change.status, "giữ nguyên") && contains(orcaSkillFiles, rel) {
-			if update {
-				change = initChange{path: change.path, text: string(data), write: true, backup: true, status: "cập nhật (bản cũ: .bak)"}
-			} else {
-				change.status += " - lấy bản mới: wj init -update"
-			}
+		// A file the project has in another form is never overwritten: an agent merges
+		// the kit's version into it (see init_merge.go).
+		if strings.HasPrefix(change.status, "giữ nguyên") {
+			change = mergeChange(change, rel, string(data), initMergePreview)
 		}
 		changes = append(changes, change)
 		return nil
@@ -489,6 +508,17 @@ func planLocalMemory(root string, _ []string) (initChange, error) {
 		return initChange{path: path, status: "đã đúng"}, nil
 	}
 	_, statErr := os.Stat(path)
+	// This machine's own defaults (skills to switch off) go in once, with the memory folder.
+	if data, err := kitFS.ReadFile(kitBase + "/settings.local.json"); err == nil {
+		var local map[string]any
+		if json.Unmarshal(data, &local) == nil {
+			for key, value := range local {
+				if _, exists := doc[key]; !exists {
+					doc[key] = value
+				}
+			}
+		}
+	}
 	doc["autoMemoryDirectory"] = filepath.Join(mainRepoRoot(root), ".claude", "memory")
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
@@ -646,10 +676,9 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 		present[strings.TrimSpace(line)] = true
 	}
 	// .claude/worktrees/ is where Claude Code puts each worker subagent's worktree.
-	// Memory stays on this machine: Claude Code's own notes in .claude/memory/,
-	// lessons about this machine in CLAUDE.local.md. Lessons about the project
-	// are committed, in AGENTS.md.
-	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", ".claude/memory/", "CLAUDE.local.md"}
+	// Claude Code's own notes in .claude/memory/ are committed: the team shares them.
+	// Lessons about this machine stay in CLAUDE.local.md.
+	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", "CLAUDE.local.md"}
 	for _, id := range stacks {
 		extra, err := kitFS.ReadFile(kitStacks + "/" + id + "/gitignore")
 		if err != nil {

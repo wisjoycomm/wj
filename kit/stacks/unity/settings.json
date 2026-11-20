@@ -1,12 +1,22 @@
 {
   "permissions": {
+    "ask": [
+      "Read(**/*.unity)",
+      "Read(**/*.prefab)",
+      "Read(**/*.asset)",
+      "Read(**/*.mat)",
+      "Edit(/ProjectSettings/**)",
+      "Edit(/Packages/manifest.json)"
+    ],
     "deny": [
       "Read(/Library/**)",
       "Read(/Temp/**)",
       "Read(/Logs/**)",
       "Read(/obj/**)",
       "Read(/UserSettings/**)",
-      "Read(/Packages/packages-lock.json)"
+      "Read(/Packages/packages-lock.json)",
+      "Edit(**/*.unity)",
+      "Edit(**/*.prefab)"
     ]
   }
 }

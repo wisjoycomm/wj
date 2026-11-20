@@ -305,7 +305,7 @@ func TestPlanWorkerForAnotherVendorsModel(t *testing.T) {
 		t.Errorf("output:\n%s", out.String())
 	}
 	agent := readText(t, filepath.Join(root, ".claude", "agents", "orca-worker-cx-gpt-6-1-sol.md"))
-	for _, want := range []string{"name: orca-worker-cx-gpt-6-1-sol\nmodel: cx/gpt-6.1-sol\n", "isolation: worktree", "wj verify <ID>", "runs on the model cx/gpt-6.1-sol"} {
+	for _, want := range []string{"name: orca-worker-cx-gpt-6-1-sol\nmodel: cx/gpt-6.1-sol\n", "isolation: worktree", "Verify by hand", "runs on the model cx/gpt-6.1-sol"} {
 		if !strings.Contains(agent, want) {
 			t.Errorf("worker lacks %q:\n%s", want, agent[:400])
 		}

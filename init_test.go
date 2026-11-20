@@ -56,7 +56,7 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 		}
 	}
 	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
-	for _, want := range []string{"Bash(wj verify *)", "Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
+	for _, want := range []string{"Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
 		"CLAUDE_CODE_GLOB_NO_IGNORE", `"baseRef": "head"`, "BASH_MAX_OUTPUT_LENGTH", "&& wj guard || true"} {
 		if !strings.Contains(settings, want) {
 			t.Errorf("settings.json lacks %q", want)
@@ -213,7 +213,7 @@ func TestInitLiteNeedsNoWj(t *testing.T) {
 	runInitIn(t, root, "-type", "web")
 	settings = readText(t, filepath.Join(root, ".claude", "settings.json"))
 	agents = readText(t, filepath.Join(root, "AGENTS.md"))
-	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "wj plan") {
+	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "## Orca: plan and parallel workers") {
 		t.Error("a full run after a lite one must add the Orca layer")
 	}
 	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
@@ -269,7 +269,9 @@ func TestKitSkillsCallOnlyWj(t *testing.T) {
 	}
 }
 
-func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
+func TestInitUpdateMergesOldSkillsAndRemovesOldScripts(t *testing.T) {
+	calls := 0
+	fakeMerger(t, &calls)
 	root := t.TempDir()
 	skill := filepath.Join(root, ".claude", "skills", "orca-orchestrator", "SKILL.md")
 	oldWorker := filepath.Join(root, ".claude", "skills", "orca-stateless-worker")
@@ -281,17 +283,14 @@ func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
 	writeTestFile(t, filepath.Join(root, ".claude", "settings.json"), `{"env":{"MINE":"1","CLAUDE_CODE_GLOB_NO_IGNORE":"true"}}`)
 
 	output := runInitIn(t, root)
-	if readText(t, skill) != "old skill printing launch commands" || !strings.Contains(output, "wj init -update") {
-		t.Fatalf("a plain rerun must keep the old skill and say how to update:\n%s", output)
+	if got := readText(t, skill); !strings.HasPrefix(got, "old skill printing launch commands") || !strings.Contains(got, "orca-worker") {
+		t.Fatalf("a rerun must merge the kit's skill into the old one, keeping it:\n%s\n%s", got, output)
 	}
 	if _, err := os.Stat(script); err != nil {
 		t.Fatal("a plain rerun must keep what the old skills call")
 	}
 
 	runInitIn(t, root, "-update")
-	if !strings.Contains(readText(t, skill), "orca-worker") {
-		t.Error("skill not replaced by the kit's")
-	}
 	if backups, _ := filepath.Glob(skill + ".bak-*"); len(backups) != 1 {
 		t.Errorf("want one backup of the old skill, got %d", len(backups))
 	}
@@ -301,8 +300,8 @@ func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
 		t.Error("the worker subagent must be installed")
 	}
-	if readText(t, filepath.Join(root, "CLAUDE.md")) != "mine" {
-		t.Error("-update must not touch CLAUDE.md")
+	if got := readText(t, filepath.Join(root, "CLAUDE.md")); !strings.HasPrefix(got, "mine") {
+		t.Errorf("CLAUDE.md must keep the user's text:\n%s", got)
 	}
 	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
 	if !strings.Contains(settings, `"MINE": "1"`) || !strings.Contains(settings, `"CLAUDE_CODE_GLOB_NO_IGNORE": "true"`) {
@@ -322,10 +321,16 @@ func TestInitKeepsClaudeMemoryInsideTheProject(t *testing.T) {
 		t.Errorf("autoMemoryDirectory = %v, want %s", doc["autoMemoryDirectory"], want)
 	}
 	ignore := readText(t, filepath.Join(root, ".gitignore"))
-	for _, want := range []string{".claude/memory/", ".claude/settings.local.json", "CLAUDE.local.md"} {
+	for _, want := range []string{".claude/settings.local.json", "CLAUDE.local.md"} {
 		if !strings.Contains(ignore, want) {
-			t.Errorf("%s must be gitignored: memory is local", want)
+			t.Errorf("%s must be gitignored: it is local", want)
 		}
+	}
+	if strings.Contains(ignore, ".claude/memory/") {
+		t.Error("memory notes are shared through git, so they must not be gitignored")
+	}
+	if _, ok := doc["skillOverrides"]; !ok {
+		t.Error("settings.local.json lacks the kit's skillOverrides")
 	}
 
 	// A worktree points at the main checkout's folder, so the repo has one memory.
@@ -457,12 +462,9 @@ func TestInitWritesKitVersion(t *testing.T) {
 		t.Fatalf("wj-kit = %q", got)
 	}
 	buildVersion = "0.2.4"
-	if out := runInitIn(t, root, "-type", "go"); !strings.Contains(out, "wj init -update") || readText(t, path) != "0.2.3\n" {
-		t.Errorf("version changed without -update:\n%s", out)
-	}
-	runInitIn(t, root, "-type", "go", "-update")
+	runInitIn(t, root, "-type", "go")
 	if got := readText(t, path); got != "0.2.4\n" {
-		t.Errorf("wj-kit after -update = %q", got)
+		t.Errorf("every run merges the current kit, so it records its version: wj-kit = %q", got)
 	}
 }
 

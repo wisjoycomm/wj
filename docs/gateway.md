@@ -1,4 +1,9 @@
-# Gateway ai.adnx.vn: lỗi `tool_reference` (điều tra 2026-11-09, đã sửa 2026-11-11)
+# Gateway: lỗi `tool_reference` làm tắt tool search
+
+Gateway ở đây là proxy API bên thứ ba đứng giữa Claude Code và Anthropic (đặt bằng `ANTHROPIC_BASE_URL`). Lỗi dưới
+đây có thể gặp ở bất kỳ gateway nào đổi tên tool. Trang này mô tả lỗi, cách nhận ra, và script kiểm tra một gateway
+bất kỳ. Số liệu bên dưới đo trên một gateway cụ thể (điều tra 2026-11-09, gateway đó sửa 2026-11-11); gateway khác
+phải tự chạy script để biết.
 
 Các phần "Lỗi chính" và "Bằng chứng" bên dưới mô tả lỗi **trước khi sửa** (2026-11-09). Kết quả kiểm tra lại ngày 2026-11-11 nằm ở mục "Kết quả kiểm tra lại".
 
@@ -71,7 +76,7 @@ Thêm:
 
 ## So với dùng gói Claude trực tiếp
 
-| | Trực tiếp | Qua ai.adnx.vn |
+| | Trực tiếp | Qua gateway đổi tên tool |
 |---|---|---|
 | Tên tool lên Anthropic | Giữ nguyên | Thêm `_ide` |
 | Tool chèn thêm | Không | 20 tool cố định |
@@ -86,7 +91,7 @@ Thêm:
 
 ## Kết quả kiểm tra lại (2026-11-11)
 
-Gọi thẳng gateway, model `cc/claude-haiku-4-5-20251001`.
+Gọi thẳng gateway đã điều tra, bằng model Haiku của gateway đó.
 
 | Test | Trước (11-09) | Sau (11-11) |
 |---|---|---|
@@ -104,18 +109,23 @@ Chưa kiểm tra bằng một phiên Claude Code thật qua gateway: kiểm tra 
 
 ## Kiểm tra lại
 
-Script trong [gateway-adnx/](gateway-adnx/). Script đọc key từ `GATEWAY_KEY`, hoặc từ `~/.wj/profiles/adnx.json` nếu không có, và không in key ra. Mỗi lần chạy tốn vài nghìn token Haiku.
+Script trong [gateway/](gateway/), dùng được cho mọi gateway. Chọn gateway bằng một trong hai cách:
+
+- `WJ_PROFILE=<tên profile>`: lấy `base_url`, `credential` và model có chữ `haiku` từ `~/.wj/profiles/<tên>.json`.
+- `GATEWAY_URL`, `GATEWAY_KEY`, `GATEWAY_MODEL`: đặt tay (biến đặt tay thắng profile).
+
+Script không in key ra. Mỗi lần chạy tốn vài nghìn token của model đó. Script bash cần `jq`.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File docs\gateway-adnx\repro.ps1
+$env:WJ_PROFILE = "<tên>"; powershell -ExecutionPolicy Bypass -File docs\gateway\repro.ps1
 ```
 ```bash
-bash docs/gateway-adnx/repro.sh                 # bảng kết quả T1–T8
-bash docs/gateway-adnx/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
+WJ_PROFILE=<tên> bash docs/gateway/repro.sh                 # bảng kết quả T1–T8
+WJ_PROFILE=<tên> bash docs/gateway/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
 ```
 
 Đọc kết quả:
-- **Gateway đã sửa (tình trạng từ 2026-11-11):** T2, T4, T5 trả 200 và model gọi đúng tên gốc. Bản vá `tool_ref_suffix` trong `proxy_addon.py` không còn cần, và vô hại nên chưa gỡ.
+- **Gateway không lỗi (hoặc đã sửa):** T2, T4, T5 trả 200 và model gọi đúng tên gốc. Bản vá `tool_ref_suffix` trong `proxy_addon.py` không còn cần, và vô hại nên chưa gỡ.
 - **Bản vá proxy hỏng:** T3 trả 400, nghĩa là gateway đổi quy tắc đặt tên. Sửa `tool_ref_suffix` trong `proxy_addon.py`.
 
 Phải gọi **thẳng** gateway. Proxy wj sửa request nên sẽ che mất lỗi; các script đã tự bỏ `HTTPS_PROXY`.

@@ -15,14 +15,14 @@ CÁCH DÙNG NHANH
 CHỦ ĐỀ HƯỚNG DẪN
   help claude    kết nối Claude Code (gateway, token OAuth, API key, đăng nhập web)
   help codex     kết nối Codex CLI / OpenCode
-  help usage     xem token mọi project: wj usage, wj top, wj overlay
+  help usage     xem token mọi project: wj usage, wj overlay
   help models    lấy model từ gateway, Claude Code/Codex dùng chéo model được không
   help proxy     đo token bằng mitmproxy (cho app khác Claude/Codex)
   help apps      cài / cập nhật ứng dụng
   help tools     bộ công cụ dòng lệnh, quản lý cửa sổ
   help init      setup ban đầu cho một project (rule chung, rule theo job, skill Orca)
   help check     xem các agent có khớp cấu hình không
-  help doctor | plan | verify | digest | guard | trash    từng lệnh của project
+  help doctor | plan | verify | digest | map | guard | trash    từng lệnh của project
   help words    giải thích các từ hay gặp (gateway, token, profile...)
 
 CÀI MÁY VÀ KẾT NỐI
@@ -35,9 +35,8 @@ CÀI MÁY VÀ KẾT NỐI
   wj check                       so cấu hình giữa các agent (chỉ đọc)
 
 XEM TOKEN
-  wj top                         token mọi project, cập nhật liên tục
-  wj overlay                     token luôn nổi trên màn hình (Windows)
-  wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng
+  wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng, tự cập nhật
+  wj overlay                     token luôn nổi trên màn hình, cùng kỳ với wj usage (Windows)
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
 
@@ -45,6 +44,7 @@ PROJECT: TIẾT KIỆM TOKEN
   wj init                        cài kit cho project đang đứng (-lite: phần không cần wj)
   wj doctor                      kiểm tra máy và project, báo vấn đề, sửa (-dry-run chỉ báo, -ai nhờ AI gợi ý)
   wj digest                      lỗi lặp lại, chỗ lãng phí token, ghi chú memory của project (cho /orca-dream)
+  wj map                         ghi .claude/map.md: mỗi thư mục một dòng, script, asset theo loại, file chính
   wj plan                        PLAN.md một bảng: task sẵn sàng, check format, worker cho model khác
   wj trash <file>...             chuyển file vào thùng rác thay vì xoá hẳn
 
@@ -181,25 +181,24 @@ Chỉ hiện tên, không bao giờ hiện key: giá trị trong file cấu hìn
 
 const helpUsage = `XEM TOKEN MỌI PROJECT
 
-Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này. Không cần proxy, không
-gọi mạng, không ghi gì; tính cả phiên mở từ Orca. Các worktree của một repo gộp về
+Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này. Không cần proxy và không
+ghi gì vào file phiên. Mạng chỉ dùng để lấy bảng giá model mới của OpenRouter, mỗi ngày một lần, lưu ở
+~/.wj/prices.json (tắt: WJ_PRICES_UPDATE=off); tính cả phiên mở từ Orca. Các worktree của một repo gộp về
 một project.
 
-  wj top                  bảng trực tiếp như overlay mở rộng: app, model (mỗi model một dòng), lượt,
-                          vào, ra, đọc/ghi cache, tổng, ≈USD; project vừa chạy lên đầu, có tổng cả máy
-                          theo 24 giờ, 7 ngày, 30 ngày, toàn bộ (Ctrl+C để thoát)
-  wj top -once            in một lần
   wj overlay              cửa sổ nhỏ luôn nổi: mọi project đang mở/đang chạy và tổng cả máy;
                           project mới tự hiện; bấm đúp để xem chi tiết, kéo để đổi chỗ,
-                          chuột phải mở menu: khoảng thời gian, độ trong suốt, cỡ chữ, đóng.
+                          chuột phải mở menu: kỳ (hôm nay, tuần này, tháng này, như wj usage),
+                          độ trong suốt, cỡ chữ, đóng.
                           Cài đặt được nhớ trong overlay.json
+  wj overlay -period week   mở với kỳ tuần này (today, week, month; mặc định today)
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt,
                           có thanh màu dưới dòng tổng
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
                           Kỳ: day, week, month (1 2 3); ← → kỳ trước/sau; ↑↓ cuộn. Tab vào danh sách lệnh,
                           ở đó ↑↓ chọn → báo cáo đổi theo ngay; Enter chốt; gõ để lọc; Esc rời; q hoặc Ctrl+C
-                          thoát. Lệnh: day, week, month, analytics, agents, open, blocks, limit, top, project, app, reset, help.
+                          thoát. Lần đầu mở có dòng % đọc phiên. Lệnh: day, week, month, analytics, agents, open, blocks, limit, top, project, app, reset, help.
                           Đầu báo cáo có bảng ngày/tuần/tháng và biểu đồ token theo kỳ; cuối có cây tổng hợp.
                           Phiên Claude đang mở có dấu ● (đang trả lời) hoặc ○ (rảnh); gõ open để chỉ xem chúng
   wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát
@@ -249,7 +248,8 @@ const helpInit = `SETUP BAN ĐẦU CHO MỘT PROJECT
   wj init                     hỏi loại job (tự phát hiện sẵn), cài rule + skill Orca
   wj init -type unity         chọn sẵn; nhiều loại thì: -type unity,web
   wj init -dry-run            xem trước, không ghi gì
-  wj init -update             project cài bằng kit cũ: lấy skill mới, bỏ script .ps1 và skill worker cũ
+  wj init -update             project cài bằng kit cũ: bỏ script .ps1 và skill worker cũ
+  wj init -no-merge           không nhờ Claude Code gộp file đã có (giữ nguyên)
   wj init -lite               chỉ phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook).
                               Người không cài wj lấy đúng phần này từ wj-kit-lite-<job>.zip trong release
   wj init -remove             gỡ kit: khối wj trong AGENTS.md, file giống bản kit, hook wj guard, quyền Orca.
@@ -264,18 +264,18 @@ Tool cài (cho Claude Code):
   .claude/               skill /orca-orchestrator và /orca-dream, subagent orca-worker,
                          quyền chạy lệnh, file cấm đọc (lockfile, cache, .env),
                          hook wj guard chặn đọc cả file dài, và giới hạn output Bash
-  .claude/settings.local.json   memory của Claude Code nằm trong project (.claude/memory/),
+  .claude/settings.local.json   memory của Claude Code nằm trong project (.claude/memory/, vào git), tắt bớt skill (skillOverrides),
                          không còn ở ~/.claude. File này không vào git: mỗi worktree chạy wj init một lần
-  .gitignore             .tmp/, memory, worktree của worker, thư mục build của job
+  .gitignore             .tmp/, worktree của worker, thư mục build của job
 
 wj không bắt buộc: thiếu wj thì skill và worker làm tay các bước wj plan, wj verify (tốn token
-hơn) và hook wj guard tự bỏ qua. Riêng /orca-dream cần wj digest.
+hơn) và hook wj guard tự bỏ qua. /orca-dream cần bạn đưa output của wj digest.
 Cách dùng: /orca-orchestrator <mục tiêu> để chia task, rồi /orca-orchestrator go để chạy
 worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: docs/project.md.
 
 An toàn khi chạy lại:
-  - File đã có thì giữ nguyên, kể cả skill bạn đã sửa; tool chỉ báo là khác bản kit.
-    Riêng skill Orca: -update thay bằng bản kit, bản cũ sao lưu .bak-<giờ>.
+  - File đã có mà khác bản kit không bị ghi đè: Claude Code (claude -p) gộp bản kit vào, giữ mọi dòng
+    của bạn, bản cũ sao lưu .bak-<giờ>. Không có claude, hoặc -no-merge: giữ nguyên.
   - AGENTS.md: chỉ cập nhật phần nằm giữa dấu wj:begin / wj:end, phần bạn tự viết giữ nguyên.
   - settings.json và .gitignore: chỉ thêm, không xóa; lệnh bạn đã chặn vẫn bị chặn.
 
@@ -332,7 +332,7 @@ func printHelp(args []string, input io.Reader, out io.Writer) error {
 		fmt.Fprintln(out, trashHelp)
 	case "guard":
 		fmt.Fprintln(out, guardHelp)
-	case "digest", "dream":
+	case "digest", "dream", "map":
 		fmt.Fprintln(out, digestHelp)
 	case "words", "terms", "tu":
 		fmt.Fprintln(out, helpWords)

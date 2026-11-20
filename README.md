@@ -77,7 +77,7 @@ the public install commands fetch the latest **published** binary, not local cha
 wj init                  ask which job this is (detected ones are suggested)
 wj init -type unity,web  choose directly
 wj init -dry-run         preview, write nothing
-wj init -update          project set up by an older kit: take the current Orca skills
+wj init -update          project set up by an older kit: remove old kit files
 wj init -remove          take the kit out: only what wj owns, your edits stay; removed
                          files go to the recycle bin. With -dry-run it only lists
 ```
@@ -89,7 +89,7 @@ table, the `/orca-orchestrator` and `/orca-dream` skills and the `orca-worker` s
 in `.claude/`, Claude permissions (allowed commands, and `Read` deny rules for
 lockfiles, caches and `.env`) and `.gitignore` entries. It also keeps Claude Code's
 auto memory inside the project (`.claude/memory/`, set through `autoMemoryDirectory`
-in the uncommitted `.claude/settings.local.json`) instead of under `~/.claude`. To add a job,
+in the uncommitted `.claude/settings.local.json`, which also switches off unused skills) instead of under `~/.claude`; the memory folder itself is committed so the team shares it. To add a job,
 add a folder under `kit/stacks/` and an entry in `initStacksList`. The kit keeps
 `.claude/` as `dot-claude/`, so Claude Code working on this repo doesn't
 load the kit's skills as its own.
@@ -106,9 +106,10 @@ Existing files are safe. Files that already exist are kept and reported, includi
 edited skills. In `AGENTS.md` only the text between `wj:begin` and `wj:end` markers
 is refreshed, and shared rules are not added to an `AGENTS.md` that wj did not
 create. `.claude/settings.json` and `.gitignore` only gain entries, and a rule you
-already set is left as it is. `-update` replaces Orca skills that differ from the
-kit's (the old file is backed up) and removes what older kits installed: the `.ps1`
-scripts and the `orca-stateless-worker` skill.
+already set is left as it is. A file that differs from the kit's is never overwritten:
+wj asks Claude Code (`claude -p`) to merge the kit's version into it, keeping every line
+you wrote, and backs the old file up (`-no-merge` skips this). `-update` also removes
+what older kits installed: the `.ps1` scripts and the `orca-stateless-worker` skill.
 
 You talk to one Claude Code session. `/orca-orchestrator <goal>` plans
 tasks into `PLAN.md`; `/orca-orchestrator go` starts each ready task as a worker in its
@@ -117,10 +118,10 @@ own git worktree: an Orca session started with the `orca` CLI, visible in its ow
 the worker verifies, commits on its branch and reports one line; `/orca-orchestrator
 merge T-01` merges and archives on your say. `wj digest` condenses the failures in the
 project's Claude Code transcripts (repeated tool errors, denied commands, handovers
-that were not PASS) and `/orca-dream` turns them into proposed fixes for you to approve.
+that were not PASS); you run it and give the output to `/orca-dream`, which turns it into proposed fixes for you to approve.
 
-The skills and the worker call `wj plan`, `wj verify` and `wj digest`, so the machine
-needs `wj` on PATH; nothing else. `wj verify T-01` lists the changed files, warns about
+The skills and the worker never run `wj`: they do every step by hand, so `wj` is a tool you
+run yourself. `wj verify T-01` lists the changed files, warns about
 files outside the task's Scope, runs the task's Verify command (or detects one:
 Unity EditMode tests, the `package.json` test script, pytest, `go test`) and ends
 with one line: `VERIFY: PASS`, `VERIFY: FAIL (...)` or `VERIFY: NOT_VERIFIED (...)`.
@@ -421,8 +422,9 @@ Cursor and Antigravity are machine-wide only.
 
 ## Token usage from session files
 
-`wj usage`, `wj top` and `wj overlay` (Windows) read Claude Code and Codex session files,
-so they need no proxy or network. See [docs/token.md](docs/token.md).
+`wj usage` and `wj overlay` (Windows, same periods as `wj usage`) read the session files of Claude Code,
+Codex, OpenCode and Antigravity, so they need no proxy. The only network call is a daily refresh of model
+prices from OpenRouter into `~/.wj/prices.json` (off: `WJ_PRICES_UPDATE=off`). See [docs/token.md](docs/token.md).
 Gateway model refresh and probing: [docs/model.md](docs/model.md).
 
 ## Token usage through mitmproxy

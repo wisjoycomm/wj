@@ -248,7 +248,7 @@ func checkKit(env doctorEnv) []doctorFinding {
 	var lines []string
 	for _, change := range changes {
 		// settings.local.json is this machine's own file, not part of the kit's state.
-		if !change.write && !strings.Contains(change.status, "wj init -update") || change.path == projectSettingsPath(root) {
+		if !change.write && !strings.Contains(change.status, mergeHint) || change.path == projectSettingsPath(root) {
 			continue
 		}
 		rel, err := filepath.Rel(root, change.path)
@@ -264,8 +264,14 @@ func checkKit(env doctorEnv) []doctorFinding {
 		Key:    "kit:" + filepath.Base(root),
 		Title:  fmt.Sprintf("Kit của project cũ hơn wj này (%d mục): %s", len(lines), root),
 		Detail: strings.Join(lines, "\n"),
-		Fix:    "wj init (chỉ thêm, không ghi đè file của bạn); skill cũ thì wj init -update",
+		Fix:    "wj init (chỉ thêm, không ghi đè: file khác bản kit được Claude Code gộp vào, bản cũ .bak)",
 		fix: func(out io.Writer) error {
+			initMerger = newInitMerger(out)
+			defer func() { initMerger = nil }()
+			changes, err := planInit(root, stacks, false, lite)
+			if err != nil {
+				return err
+			}
 			return applyInit(root, stacks, changes, false, lite, out)
 		},
 	}}

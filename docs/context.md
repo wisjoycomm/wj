@@ -1,6 +1,6 @@
 # Token tăng vọt và cách giảm context
 
-Khi số token trên `wj top` hoặc overlay tăng bất thường, xem phần này để tìm nguyên nhân và cách giảm mà không mất
+Khi số token trên `wj usage` hoặc overlay tăng bất thường, xem phần này để tìm nguyên nhân và cách giảm mà không mất
 thông tin quan trọng.
 
 ## Vì sao tốn
@@ -17,7 +17,7 @@ Chưa rõ nó tính vào hạn mức gói subscription theo tỷ lệ nào.
 ## Trước tiên: loại trừ lỗi gateway
 
 Nếu file phiên có một trong hai dòng sau thì không phải do cách làm việc, mà do gateway làm hỏng tool search
-(+~280k mỗi lượt). Xem [gateway-adnx.md](gateway-adnx.md).
+(+~280k mỗi lượt). Xem [gateway.md](gateway.md).
 - `Tool references removed - tool search not enabled`
 - `ToolSearch is no longer available`
 

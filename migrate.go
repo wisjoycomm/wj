@@ -59,7 +59,7 @@ func ensureShortCommand(exe string, out io.Writer) error {
 func shouldMigrate(args []string) bool {
 	if len(args) > 0 {
 		switch args[0] {
-		case "check", "usage", "top", "overlay", "version", "--version", "-version", "help", "-h", "--help", "-help", "/?":
+		case "check", "usage", "overlay", "version", "--version", "-version", "help", "-h", "--help", "-help", "/?":
 			return false
 		}
 	}

@@ -220,10 +220,10 @@ type overlayView struct {
 	big        uintptr // bold, larger: the total
 	scale      float64
 	statePath  string
-	moving     bool // inside a drag: don't pull the window back into the work area yet
-	window     time.Duration
-	alpha      byte // background alpha; text stays opaque
-	textPct    int  // text size in percent of the default
+	moving     bool   // inside a drag: don't pull the window back into the work area yet
+	window     string // the period, as wj usage names it: today, week or month
+	alpha      byte   // background alpha; text stays opaque
+	textPct    int    // text size in percent of the default
 	refresh    chan struct{}
 }
 
@@ -235,8 +235,23 @@ type overlaySettings struct {
 	Text    int    `json:",omitempty"` // percent, 80-160
 }
 
-var overlayWindows = []time.Duration{time.Hour, 24 * time.Hour, 7 * 24 * time.Hour}
-var overlayWindowNames = []string{"1 giờ", "24 giờ", "7 ngày"}
+// The overlay counts the same periods as wj usage (calendar day, week from Monday,
+// month), so its numbers match the usage report.
+var overlayWindows = []string{"today", "week", "month"}
+var overlayWindowNames = []string{"Hôm nay", "Tuần này", "Tháng này"}
+
+func overlayPeriodTag(spec string) string {
+	return map[string]string{"today": "hôm nay", "week": "tuần này", "month": "tháng này"}[spec]
+}
+
+// overlayPeriodStart is where the period that holds now begins.
+func overlayPeriodStart(spec string, now time.Time) time.Time {
+	if p, err := resolvePeriod(spec, now); err == nil {
+		return p.Start
+	}
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+}
+
 var overlayOpacities = []int{40, 60, 80, 92, 100}
 var overlayTextSizes = []int{85, 100, 125, 150}
 
@@ -253,7 +268,7 @@ var overlay overlayView
 func runOverlay(args []string, out io.Writer, home string) error {
 	flags := flag.NewFlagSet("overlay", flag.ContinueOnError)
 	flags.SetOutput(out)
-	window := flags.Duration("since", 24*time.Hour, "khoảng thời gian, ví dụ 1h, 24h, 168h (7 ngày)")
+	window := flags.String("period", "today", "kỳ đếm token như wj usage: today, week, month")
 	foreground := flags.Bool("run", false, "chạy cửa sổ ngay trong tiến trình này")
 	warn := flags.String("warn", "", "đổi màu dòng tổng khi gần tới ngưỡng này, ví dụ 5M, 500k")
 	if err := flags.Parse(args); err != nil {
@@ -263,7 +278,10 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		return err
 	}
 	sinceSet := false
-	flags.Visit(func(f *flag.Flag) { sinceSet = sinceSet || f.Name == "since" })
+	flags.Visit(func(f *flag.Flag) { sinceSet = sinceSet || f.Name == "period" })
+	if !containsName(overlayWindows, *window) {
+		return errors.New("-period chỉ nhận: today, week, month")
+	}
 	if *warn != "" {
 		limit, err := parseTokenCount(*warn)
 		if err != nil {
@@ -283,7 +301,7 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		fmt.Fprintln(out, "Đã đóng overlay.")
 		return nil
 	case flags.NArg() != 0:
-		return errors.New("cách dùng: wj overlay [-since 24h] [-warn 5M] | wj overlay stop")
+		return errors.New("cách dùng: wj overlay [-period today|week|month] [-warn 5M] | wj overlay stop")
 	}
 	if existing != 0 {
 		fmt.Fprintln(out, "Overlay đang mở rồi. Đóng: wj overlay stop")
@@ -298,7 +316,7 @@ func runOverlay(args []string, out io.Writer, home string) error {
 	}
 	childArgs := []string{"overlay", "-run", "-warn", *warn}
 	if sinceSet {
-		childArgs = append(childArgs, "-since", window.String())
+		childArgs = append(childArgs, "-period", *window)
 	}
 	cmd := exec.Command(exe, childArgs...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: detachedProcess | windows.CREATE_NEW_PROCESS_GROUP}
@@ -310,13 +328,13 @@ func runOverlay(args []string, out io.Writer, home string) error {
 	return nil
 }
 
-func overlayLoop(window time.Duration, sinceSet bool, home string) error {
+func overlayLoop(window string, sinceSet bool, home string) error {
 	runtime.LockOSThread()
 	overlay.statePath = filepath.Join(stateDir(home), "overlay.json")
 	overlay.alpha, overlay.textPct = bgAlpha, 100
 	if saved, ok := overlayLoadSettings(); ok {
-		if d, err := time.ParseDuration(saved.Since); err == nil && d > 0 && !sinceSet {
-			window = d
+		if containsName(overlayWindows, saved.Since) && !sinceSet {
+			window = saved.Since
 		}
 		if saved.Opacity >= 20 && saved.Opacity <= 100 {
 			overlay.alpha = byte(saved.Opacity * 255 / 100)
@@ -327,7 +345,7 @@ func overlayLoop(window time.Duration, sinceSet bool, home string) error {
 	}
 	overlay.window = window
 	overlay.refresh = make(chan struct{}, 1)
-	overlay.title = windowTag(window)
+	overlay.title = overlayPeriodTag(window)
 	overlayDPIAware()
 	instance, _, _ := getModuleHandle.Call(0)
 	class, _ := windows.UTF16PtrFromString(overlayClass)
@@ -411,12 +429,13 @@ func overlayFont(points, weight int, dpi uintptr) uintptr {
 func int32ToPtr(v int) uintptr { return uintptr(int64(v)) }
 
 func overlayFeed(home string, hwnd uintptr) {
+	refreshPrices(home, nil, true)
 	scanner := newSessionScanner(home)
 	for {
 		overlay.mu.Lock()
 		window := overlay.window
 		overlay.mu.Unlock()
-		since := time.Now().Add(-window)
+		since := overlayPeriodStart(window, time.Now())
 		scanner.scan(time.Time{})
 		list, total := scanner.projectStatus(since)
 		now := time.Now()
@@ -434,13 +453,13 @@ func overlayFeed(home string, hwnd uintptr) {
 			detail = append(detail, overlayDetailLine(entry, now))
 		}
 		whole := scanner.machineTotals(now)
-		whole += fmt.Sprintf(" · %s ≈%s theo giá API %s", windowTag(window), costText(total), pricesAsOf)
+		whole += fmt.Sprintf(" · %s ≈%s theo giá API %s", overlayPeriodTag(window), costText(total), pricesAsOf)
 		shown := compactTokens(total.Total)
 		if overlay.warn > 0 {
 			shown += "/" + compactTokens(overlay.warn)
 		}
 		overlay.mu.Lock()
-		overlay.title = windowTag(window)
+		overlay.title = overlayPeriodTag(window)
 		overlay.lines, overlay.detail, overlay.total, overlay.footer, overlay.whole = lines, detail, shown, footer, whole
 		overlay.warnLevel = warnLevel(total.Total, overlay.warn)
 		overlay.used = total.Total
@@ -550,7 +569,7 @@ func overlayMenu(hwnd uintptr) {
 		name, _ := windows.UTF16PtrFromString(title)
 		appendMenu.Call(menu, mfPopup, sub, uintptr(unsafe.Pointer(name))) // destroyed with menu
 	}
-	submenu("Khoảng thời gian", len(overlayWindows), func(i int) uintptr { return uintptr(menuSince + i) },
+	submenu("Kỳ (như wj usage)", len(overlayWindows), func(i int) uintptr { return uintptr(menuSince + i) },
 		func(i int) string { return overlayWindowNames[i] }, func(i int) bool { return overlayWindows[i] == window })
 	submenu("Độ trong suốt", len(overlayOpacities), func(i int) uintptr { return uintptr(menuOpacity + i) },
 		func(i int) string { return fmt.Sprintf("%d%%", overlayOpacities[i]) },
@@ -580,7 +599,7 @@ func overlayChoose(hwnd uintptr, choice int) {
 	case choice >= menuSince && choice < menuSince+len(overlayWindows):
 		overlay.mu.Lock()
 		overlay.window = overlayWindows[choice-menuSince]
-		overlay.title = windowTag(overlay.window)
+		overlay.title = overlayPeriodTag(overlay.window)
 		overlay.mu.Unlock()
 		select {
 		case overlay.refresh <- struct{}{}:
@@ -825,7 +844,7 @@ func overlaySavePosition(hwnd uintptr) {
 	var rect winRect
 	getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 	overlay.mu.Lock()
-	saved := overlaySettings{X: rect.Left, Y: rect.Top, Since: overlay.window.String(), Opacity: (int(overlay.alpha)*100 + 127) / 255, Text: overlay.textPct}
+	saved := overlaySettings{X: rect.Left, Y: rect.Top, Since: overlay.window, Opacity: (int(overlay.alpha)*100 + 127) / 255, Text: overlay.textPct}
 	overlay.mu.Unlock()
 	data, err := json.Marshal(saved)
 	if err != nil {

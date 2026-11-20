@@ -59,8 +59,24 @@ func memoryDir(root string) string {
 			return filepath.Clean(dir)
 		}
 	}
-	return filepath.Join(root, ".claude", "memory")
+	inRepo := filepath.Join(root, ".claude", "memory")
+	if isDir(inRepo) {
+		return inRepo
+	}
+	// Without autoMemoryDirectory Claude Code keeps the notes under its own folder,
+	// in projects/<the repo path with every other character than a-z, 0-9 as ->.
+	if home, err := os.UserHomeDir(); err == nil {
+		slug := claudeProjectSlug.ReplaceAllString(root, "-")
+		for _, dir := range claudeDataDirs(home) {
+			if global := filepath.Join(dir, "projects", slug, "memory"); isDir(global) {
+				return global
+			}
+		}
+	}
+	return inRepo
 }
+
+var claudeProjectSlug = regexp.MustCompile(`[^A-Za-z0-9]`)
 
 // missingPaths lists the paths a text names in backticks that the project does
 // not have. A name that is not a path at all (a command, a flag) is skipped, so
