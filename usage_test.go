@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -153,47 +152,6 @@ func TestProjectNameJoinsWorktreesToMainRepo(t *testing.T) {
 	}
 }
 
-func TestRenderTopMarksActiveProjectsFirst(t *testing.T) {
-	s, home := testScanner(t)
-	now := time.Now().UTC()
-	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "a.jsonl"),
-		claudeLine("a", "/w/big-old", now.Add(-3*time.Hour).Format(time.RFC3339), 5_000_000, 0, 0, 0)+
-			claudeLine("b", "/w/small-new", now.Add(-10*time.Second).Format(time.RFC3339), 900, 0, 0, 0))
-	s.scan(time.Time{})
-	out := renderTop(s.topReport(time.Time{}), "trong 24h", now, 0, 0)
-	if strings.Index(out, "small-new") > strings.Index(out, "big-old") {
-		t.Errorf("order:\n%s", out)
-	}
-	if !strings.Contains(out, "● small-new") || strings.Contains(out, "● big-old") || !strings.Contains(out, "5.0M") {
-		t.Errorf("render:\n%s", out)
-	}
-}
-
-func TestRenderTopShowsModelsCacheCostAndOpenSessions(t *testing.T) {
-	now := time.Now()
-	row := func(project, model string, read, write int64) usageRow {
-		return usageRow{usageTotal: usageTotal{Project: project, Model: model, Calls: 1, CacheRead: read, CacheWrite: write, Total: read + write},
-			Apps: []string{"claude"}, LastModel: model, Last: now.Add(-time.Hour), Cost: 1.5}
-	}
-	game := row("game", "", 3000, 4000)
-	report := topReport{
-		list:   []usageRow{game},
-		total:  game,
-		models: map[string][]usageRow{"game": {row("game", "model-big", 3000, 0), row("game", "model-small", 0, 4000)}},
-		open:   []string{"game", "idle"},
-	}
-	wide := renderTop(report, "trong 24h", now, 0, 0)
-	for _, want := range []string{"ĐỌC CACHE", "GHI CACHE", "≈USD", "$1.50", "2 model", "└", "model-small", "○ game", "○ idle", "đang mở"} {
-		if !strings.Contains(wide, want) {
-			t.Errorf("missing %q:\n%s", want, wide)
-		}
-	}
-	narrow := renderTop(report, "trong 24h", now, 70, 0)
-	if widestLine(narrow) >= 70 || strings.Contains(narrow, "GHI CACHE") || !strings.Contains(narrow, "└ model-small") {
-		t.Errorf("narrow:\n%s", narrow)
-	}
-}
-
 func TestRunningProjectsDropsIdleOnes(t *testing.T) {
 	now := time.Now()
 	row := func(name string, age time.Duration) usageRow {
@@ -289,18 +247,6 @@ func TestMachineTotalsAddEveryProject(t *testing.T) {
 	want := "24 giờ 1.0k · 7 ngày 3.0k · 30 ngày 7.0k · toàn bộ 15.0k"
 	if got := s.machineTotals(now); !strings.Contains(got, want) {
 		t.Errorf("got %q", got)
-	}
-}
-
-func TestTopOnceWithoutSessions(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
-	t.Setenv("CODEX_HOME", t.TempDir())
-	var out bytes.Buffer
-	if err := runTop([]string{"-once"}, &out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "Chưa có lượt gọi") {
-		t.Errorf("out = %s", out.String())
 	}
 }
 

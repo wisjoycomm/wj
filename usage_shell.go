@@ -211,6 +211,10 @@ func runUsageShell(input io.Reader, out io.Writer, home string, v usageView) err
 			return err
 		}
 	}
+	refreshPrices(home, out, true)
+	if first, err := resolvePeriod("lastmonth", time.Now()); err == nil {
+		scanWithProgress(sc, first.Start, out)
+	}
 	defer enableTerminalEscapes()()
 	height := func() int {
 		if _, h, err := term.GetSize(int(stdout.Fd())); err == nil && h >= 12 {
@@ -265,4 +269,34 @@ func usageLoop(input io.Reader, out io.Writer, sc *sessionScanner, v usageView, 
 		}
 		v, message = next, msg
 	}
+}
+
+// scanWithProgress reads the session files since `since` and keeps one status line up
+// to date, so the first open (which can read gigabytes) shows how far it is.
+func scanWithProgress(sc *sessionScanner, since time.Time, out io.Writer) {
+	total := sc.pendingBytes(since)
+	started := time.Now()
+	show := func(done int64) {
+		pct := int64(100)
+		if total > 0 {
+			pct = min(done*100/total, 100)
+		}
+		fmt.Fprintf(out, "\r\x1b[KĐang đọc phiên Claude Code, Codex: %d%% (%s / %s, %s)", pct, megabytes(done), megabytes(total),
+			time.Since(started).Round(time.Second))
+	}
+	sc.progress, sc.progressDone = show, 0
+	show(0)
+	sc.scanFiles(since)
+	sc.progress = nil
+	show(total)
+	fmt.Fprint(out, " · đang đọc OpenCode, Antigravity...")
+	sc.scanDatabases(since)
+	fmt.Fprint(out, " xong.\r\n")
+}
+
+func megabytes(n int64) string {
+	if n < 1<<20 {
+		return fmt.Sprintf("%d KB", (n+1023)>>10)
+	}
+	return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
 }

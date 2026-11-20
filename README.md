@@ -421,8 +421,9 @@ Cursor and Antigravity are machine-wide only.
 
 ## Token usage from session files
 
-`wj usage`, `wj top` and `wj overlay` (Windows) read Claude Code and Codex session files,
-so they need no proxy or network. See [docs/token.md](docs/token.md).
+`wj usage` and `wj overlay` (Windows, same periods as `wj usage`) read the session files of Claude Code,
+Codex, OpenCode and Antigravity, so they need no proxy. The only network call is a daily refresh of model
+prices from OpenRouter into `~/.wj/prices.json` (off: `WJ_PRICES_UPDATE=off`). See [docs/token.md](docs/token.md).
 Gateway model refresh and probing: [docs/model.md](docs/model.md).
 
 ## Token usage through mitmproxy

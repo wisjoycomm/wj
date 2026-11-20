@@ -1,6 +1,6 @@
 # Token tăng vọt và cách giảm context
 
-Khi số token trên `wj top` hoặc overlay tăng bất thường, xem phần này để tìm nguyên nhân và cách giảm mà không mất
+Khi số token trên `wj usage` hoặc overlay tăng bất thường, xem phần này để tìm nguyên nhân và cách giảm mà không mất
 thông tin quan trọng.
 
 ## Vì sao tốn

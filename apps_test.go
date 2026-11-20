@@ -176,7 +176,7 @@ func TestMenuReachesTokenTable(t *testing.T) {
 	if err := mainMenu(strings.NewReader("3\n1\n1\n0\n0\n0\n"), &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Cả máy") || !strings.Contains(out.String(), "wj overlay") {
+	if !strings.Contains(out.String(), "Token hôm nay") || !strings.Contains(out.String(), "wj overlay") {
 		t.Errorf("out:\n%s", out.String())
 	}
 }

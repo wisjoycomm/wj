@@ -10,7 +10,7 @@ skill Orca, khong de file da co. Chi tiet: `wj help init`.
 De xem cac agent co khop cau hinh khong, chay `wj check` (chi doc, khong can
 mang, khong hien key).
 
-Xem token moi project: `wj top`, `wj overlay`, `wj usage`. Lay lai model tu gateway:
+Xem token moi project: `wj usage`, `wj overlay`. Lay lai model tu gateway:
 `wj models`. Tai lieu ngan cho tung phan: [docs/](docs/README.md).
 
 Mot tool CLI gom bo `Bo_cong_cu`, Claude, Codex, OpenCode, Cursor, Antigravity va Orca.

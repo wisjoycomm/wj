@@ -15,7 +15,7 @@ CÁCH DÙNG NHANH
 CHỦ ĐỀ HƯỚNG DẪN
   help claude    kết nối Claude Code (gateway, token OAuth, API key, đăng nhập web)
   help codex     kết nối Codex CLI / OpenCode
-  help usage     xem token mọi project: wj usage, wj top, wj overlay
+  help usage     xem token mọi project: wj usage, wj overlay
   help models    lấy model từ gateway, Claude Code/Codex dùng chéo model được không
   help proxy     đo token bằng mitmproxy (cho app khác Claude/Codex)
   help apps      cài / cập nhật ứng dụng
@@ -35,9 +35,8 @@ CÀI MÁY VÀ KẾT NỐI
   wj check                       so cấu hình giữa các agent (chỉ đọc)
 
 XEM TOKEN
-  wj top                         token mọi project, cập nhật liên tục
-  wj overlay                     token luôn nổi trên màn hình (Windows)
-  wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng
+  wj usage                       token Claude, Codex, OpenCode, Antigravity theo ngày/tuần/tháng, tự cập nhật
+  wj overlay                     token luôn nổi trên màn hình, cùng kỳ với wj usage (Windows)
   wj proxy run claude            mở Claude qua mitmproxy (tự cài, tự bật)
   wj direct                      Claude gọi thẳng gateway, bỏ proxy đo token
 
@@ -181,25 +180,24 @@ Chỉ hiện tên, không bao giờ hiện key: giá trị trong file cấu hìn
 
 const helpUsage = `XEM TOKEN MỌI PROJECT
 
-Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này. Không cần proxy, không
-gọi mạng, không ghi gì; tính cả phiên mở từ Orca. Các worktree của một repo gộp về
+Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này. Không cần proxy và không
+ghi gì vào file phiên. Mạng chỉ dùng để lấy bảng giá model mới của OpenRouter, mỗi ngày một lần, lưu ở
+~/.wj/prices.json (tắt: WJ_PRICES_UPDATE=off); tính cả phiên mở từ Orca. Các worktree của một repo gộp về
 một project.
 
-  wj top                  bảng trực tiếp như overlay mở rộng: app, model (mỗi model một dòng), lượt,
-                          vào, ra, đọc/ghi cache, tổng, ≈USD; project vừa chạy lên đầu, có tổng cả máy
-                          theo 24 giờ, 7 ngày, 30 ngày, toàn bộ (Ctrl+C để thoát)
-  wj top -once            in một lần
   wj overlay              cửa sổ nhỏ luôn nổi: mọi project đang mở/đang chạy và tổng cả máy;
                           project mới tự hiện; bấm đúp để xem chi tiết, kéo để đổi chỗ,
-                          chuột phải mở menu: khoảng thời gian, độ trong suốt, cỡ chữ, đóng.
+                          chuột phải mở menu: kỳ (hôm nay, tuần này, tháng này, như wj usage),
+                          độ trong suốt, cỡ chữ, đóng.
                           Cài đặt được nhớ trong overlay.json
+  wj overlay -period week   mở với kỳ tuần này (today, week, month; mặc định today)
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt,
                           có thanh màu dưới dòng tổng
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)
   wj usage                màn hình tương tác: báo cáo ở trên, danh sách lệnh (dropdown) và dòng nhập ở dưới.
                           Kỳ: day, week, month (1 2 3); ← → kỳ trước/sau; ↑↓ cuộn. Tab vào danh sách lệnh,
                           ở đó ↑↓ chọn → báo cáo đổi theo ngay; Enter chốt; gõ để lọc; Esc rời; q hoặc Ctrl+C
-                          thoát. Lệnh: day, week, month, analytics, agents, open, blocks, limit, top, project, app, reset, help.
+                          thoát. Lần đầu mở có dòng % đọc phiên. Lệnh: day, week, month, analytics, agents, open, blocks, limit, top, project, app, reset, help.
                           Đầu báo cáo có bảng ngày/tuần/tháng và biểu đồ token theo kỳ; cuối có cây tổng hợp.
                           Phiên Claude đang mở có dấu ● (đang trả lời) hoặc ○ (rảnh); gõ open để chỉ xem chúng
   wj usage week           không có terminal (pipe, script) hoặc có kỳ/cờ: in một lần rồi thoát

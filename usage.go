@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,15 +11,12 @@ import (
 	"io/fs"
 	"math"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
-
-	"golang.org/x/term"
 )
 
 // Claude Code and Codex record token usage in their own session files, so these
@@ -86,6 +82,9 @@ type sessionScanner struct {
 	antigravityExact map[string]bool      // key -> its time was written with the call
 	// Times a session's context was summarised to make room (see usage_analytics.go).
 	compactions map[string]compaction // the line's uuid -> the event, so copies count once
+	// progress, when set, hears how many bytes of session files were read so far.
+	progress     func(done int64)
+	progressDone int64
 }
 
 // agentMeta is what Claude Code writes next to a subagent's transcript.
@@ -115,12 +114,22 @@ func newSessionScanner(home string) *sessionScanner {
 // scan reads only what was appended since the last scan. Files untouched since
 // `since` cannot hold calls in that window and are skipped.
 func (s *sessionScanner) scan(since time.Time) {
+	s.scanFiles(since)
+	s.scanDatabases(since)
+}
+
+// scanFiles reads the JSONL session files of Claude Code and Codex.
+func (s *sessionScanner) scanFiles(since time.Time) {
 	for _, dir := range s.claudeDirs {
 		s.scanTree(filepath.Join(dir, "projects"), since, s.readClaudeLine)
 	}
 	for _, dir := range []string{"sessions", "archived_sessions"} {
 		s.scanTree(filepath.Join(s.codexDir, dir), since, s.readCodexLine)
 	}
+}
+
+// scanDatabases reads the SQLite files of OpenCode and Antigravity.
+func (s *sessionScanner) scanDatabases(since time.Time) {
 	s.scanOpenCode(since)
 	s.scanAntigravity(since)
 }
@@ -171,6 +180,40 @@ func (s *sessionScanner) claudeSessionMarkers() []string {
 	return paths
 }
 
+// pendingBytes is how much the next scan(since) will read from the session files: the
+// total that scanWithProgress counts up to.
+func (s *sessionScanner) pendingBytes(since time.Time) int64 {
+	var total int64
+	var roots []string
+	for _, dir := range s.claudeDirs {
+		roots = append(roots, filepath.Join(dir, "projects"))
+	}
+	for _, dir := range []string{"sessions", "archived_sessions"} {
+		roots = append(roots, filepath.Join(s.codexDir, dir))
+	}
+	for _, root := range roots {
+		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".jsonl") {
+				return nil
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return nil
+			}
+			state := s.files[path]
+			switch {
+			case state == nil && info.ModTime().Before(since):
+			case state == nil || info.Size() < state.offset:
+				total += info.Size()
+			default:
+				total += info.Size() - state.offset
+			}
+			return nil
+		})
+	}
+	return total
+}
+
 func (s *sessionScanner) scanTree(root string, since time.Time, parse func(string, *sessionFile, []byte)) {
 	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".jsonl") {
@@ -213,6 +256,13 @@ func (s *sessionScanner) readAppended(path string, state *sessionFile, parse fun
 		}
 		state.offset += int64(len(line))
 		parse(path, state, line)
+		if s.progress != nil {
+			before := s.progressDone
+			s.progressDone += int64(len(line))
+			if s.progressDone>>22 != before>>22 { // every 4 MB
+				s.progress(s.progressDone)
+			}
+		}
 	}
 }
 
@@ -626,6 +676,10 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 		}
 		words, rest = append(words, flags.Arg(0)), flags.Args()[1:]
 	}
+	// Scripts and status lines must not wait for the network: they use the saved prices.
+	if home, err := os.UserHomeDir(); err == nil {
+		refreshPrices(home, nil, false)
+	}
 	period := ""
 	switch len(words) {
 	case 0:
@@ -971,234 +1025,4 @@ func shortWindow(d time.Duration) string {
 		return fmt.Sprintf("%d giờ", int(d.Hours()))
 	}
 	return d.String()
-}
-
-// topReport is everything one frame of wj top shows.
-type topReport struct {
-	list   []usageRow            // projects in the window, newest first
-	total  usageRow              // the whole window
-	models map[string][]usageRow // each project's usage per model, biggest first
-	apps   []usageRow            // the whole window per app
-	open   []string              // projects with an open Claude Code session
-}
-
-func (s *sessionScanner) topReport(since time.Time) topReport {
-	list, total := s.projectStatus(since)
-	apps, _ := s.summarize(usageFilter{Since: since, GroupBy: []string{"client"}})
-	return topReport{list: list, total: total, models: s.modelsByProject(since), apps: apps, open: s.openClaudeProjects()}
-}
-
-// topLayout is how much a terminal width can hold: the model column, and the cache
-// split into read and write.
-type topLayout struct{ model, splitCache bool }
-
-// topLinesAround counts the lines of a frame that are not project rows.
-const topLinesAround = 12
-
-// renderTop shows the same report as the expanded overlay, plus calls and the cache
-// split, and picks the widest layout that fits the terminal (width 0 = any).
-func renderTop(r topReport, label string, now time.Time, width, height int) string {
-	rows := append([]usageRow{}, r.list...)
-	for _, name := range r.open {
-		seen := false
-		for _, row := range rows {
-			seen = seen || row.Project == name
-		}
-		if !seen {
-			rows = append(rows, usageRow{usageTotal: usageTotal{Project: name}, Apps: []string{"claude"}})
-		}
-	}
-	budget := 0
-	if height > 0 {
-		budget = max(height-topLinesAround, 1)
-	}
-	hidden := 0
-	if budget > 0 && len(rows) > budget {
-		hidden = len(rows) - budget
-		rows = rows[:budget]
-	}
-	entries := detailEntries(rows, r.models, budget)
-
-	var out string
-	for _, layout := range []topLayout{{true, true}, {true, false}, {false, false}} {
-		out = renderTopTable(r, entries, layout, label, now, hidden)
-		if width == 0 || widestLine(out) < width {
-			break
-		}
-	}
-	return out
-}
-
-func widestLine(text string) int {
-	widest := 0
-	for _, line := range strings.Split(text, "\n") {
-		widest = max(widest, len([]rune(line)))
-	}
-	return widest
-}
-
-func renderTopTable(r topReport, entries []overlayDetailEntry, layout topLayout, label string, now time.Time, hidden int) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "wj top - token theo project, %s (%s)\n\n", label, now.Format("15:04:05"))
-	if len(entries) == 0 {
-		b.WriteString("Chưa có lượt gọi nào trong khoảng này.\n")
-		return b.String()
-	}
-	var table strings.Builder
-	w := tabwriter.NewWriter(&table, 0, 0, 2, ' ', tabwriter.AlignRight)
-	// The first columns read left to right, so they are padded by hand.
-	head := []string{"  PROJECT", "APP", "LẦN CUỐI"}
-	if layout.model {
-		head = append(head, "MODEL")
-	}
-	head = append(head, "LƯỢT", "VÀO", "RA")
-	if layout.splitCache {
-		head = append(head, "ĐỌC CACHE", "GHI CACHE")
-	} else {
-		head = append(head, "CACHE")
-	}
-	head = append(head, "TỔNG", "≈USD")
-	texts := 3
-	if layout.model {
-		texts = 4
-	}
-	widths := make([]int, texts)
-	var lines [][]string
-	add := func(cells []string) {
-		for i := range texts {
-			widths[i] = max(widths[i], len([]rune(cells[i])))
-		}
-		lines = append(lines, cells)
-	}
-	numbers := func(row usageRow) []string {
-		cells := []string{fmt.Sprint(row.Calls), compactTokens(row.Input), compactTokens(row.Output)}
-		if layout.splitCache {
-			cells = append(cells, compactTokens(row.CacheRead), compactTokens(row.CacheWrite))
-		} else {
-			cells = append(cells, compactTokens(row.CacheRead+row.CacheWrite))
-		}
-		return append(cells, compactTokens(row.Total), costText(row))
-	}
-	add(append([]string{}, head...))
-	for _, e := range entries {
-		ago := "đang mở"
-		if !e.Last.IsZero() {
-			ago = agoText(now.Sub(e.Last))
-		}
-		var cells []string
-		if e.Sub {
-			name := "  └"
-			if !layout.model {
-				name = "  └ " + cutRunes(e.Model, 22)
-			}
-			cells = []string{name, strings.Join(e.Apps, ","), ago}
-			if layout.model {
-				cells = append(cells, cutRunes(e.Model, 26))
-			}
-		} else {
-			mark := " "
-			switch {
-			case !e.Last.IsZero() && now.Sub(e.Last) < activeWindow:
-				mark = "●"
-			case containsName(r.open, e.Project):
-				mark = "○"
-			}
-			cells = []string{mark + " " + cutRunes(e.Project, 24), strings.Join(e.Apps, ","), ago}
-			if layout.model {
-				model := cutRunes(e.LastModel, 26)
-				if e.Models > 1 {
-					model = fmt.Sprintf("%d model", e.Models)
-				}
-				cells = append(cells, model)
-			}
-		}
-		add(append(cells, numbers(e.usageRow)...))
-	}
-	total := []string{"  TỔNG", "", ""}
-	if layout.model {
-		total = append(total, "")
-	}
-	add(append(total, numbers(r.total)...))
-	for _, cells := range lines {
-		for j := range texts {
-			cells[j] += strings.Repeat(" ", widths[j]-len([]rune(cells[j])))
-		}
-		fmt.Fprintf(w, "%s\t\n", strings.Join(cells, "\t"))
-	}
-	_ = w.Flush()
-	// AlignRight also pads the first column on the left; drop that indent.
-	for _, line := range strings.SplitAfter(table.String(), "\n") {
-		b.WriteString(strings.TrimPrefix(line, "  "))
-	}
-	if hidden > 0 {
-		fmt.Fprintf(&b, "  ...và %d project khác (xem đủ: wj usage)\n", hidden)
-	}
-	if len(r.apps) > 1 {
-		parts := make([]string, 0, len(r.apps))
-		for _, app := range r.apps {
-			parts = append(parts, fmt.Sprintf("%s %s %s", app.Client, compactTokens(app.Total), costText(app)))
-		}
-		fmt.Fprintf(&b, "\nTheo app: %s\n", strings.Join(parts, " · "))
-	}
-	return b.String()
-}
-
-func runTop(args []string, out io.Writer) error {
-	flags := flag.NewFlagSet("top", flag.ContinueOnError)
-	flags.SetOutput(out)
-	window := flags.Duration("since", 24*time.Hour, "khoảng thời gian, ví dụ 1h, 24h, 168h (7 ngày)")
-	interval := flags.Duration("interval", 3*time.Second, "bao lâu cập nhật một lần")
-	once := flags.Bool("once", false, "in một lần rồi thoát")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil
-		}
-		return err
-	}
-	if flags.NArg() != 0 || *interval < time.Second {
-		return errors.New("cách dùng: wj top [-since 24h] [-interval 3s] [-once]")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	scanner := newSessionScanner(home)
-	label := "trong " + shortWindow(*window)
-	frame := func(width, height int) string {
-		now := time.Now()
-		scanner.scan(time.Time{})
-		report := scanner.topReport(now.Add(-*window))
-		return renderTop(report, label, now, width, height) + "\n" + scanner.machineTotals(now) + "\n" +
-			fmt.Sprintf("≈USD = nếu trả theo giá API niêm yết ngày %s, không phải số tiền thật. Đủ mọi model: wj usage -by project-model\n", pricesAsOf)
-	}
-	stdout, isFile := out.(*os.File)
-	if *once || !isFile || !term.IsTerminal(int(stdout.Fd())) {
-		_, err = io.WriteString(out, frame(0, 0))
-		return err
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-	defer enableTerminalEscapes()()
-	fmt.Fprint(out, "\x1b[?1049h\x1b[?25l")
-	defer fmt.Fprint(out, "\x1b[?25h\x1b[?1049l")
-	ticker := time.NewTicker(*interval)
-	defer ticker.Stop()
-	for {
-		width, height, err := term.GetSize(int(stdout.Fd()))
-		if err != nil {
-			width, height = 0, 0
-		}
-		lines := strings.Split(frame(width, height)+"\nCtrl+C để thoát. ● = dùng token trong 2 phút, ○ = phiên Claude Code đang mở.\n", "\n")
-		for i, line := range lines {
-			if width > 0 {
-				lines[i] = cutRunes(line, width-1)
-			}
-		}
-		fmt.Fprint(out, "\x1b[H"+strings.Join(lines, "\x1b[K\n")+"\x1b[J")
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-		}
-	}
 }

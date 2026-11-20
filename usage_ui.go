@@ -852,8 +852,13 @@ func runUsageScreen(file *os.File, out io.Writer, sc *sessionScanner, v usageVie
 	}
 	defer enableTerminalEscapes()()
 	fmt.Fprint(out, "\x1b[?1049h\x1b[2J\x1b[H")
-	// Reading a month of session files takes several seconds the first time.
-	fmt.Fprint(out, "Đang đọc phiên của Claude Code, Codex, OpenCode, Antigravity trên máy này (lần đầu vài giây)...")
+	if home, err := os.UserHomeDir(); err == nil {
+		refreshPrices(home, out, true)
+	}
+	// Reading a month of session files takes a while the first time: show how far it is.
+	if first, err := resolvePeriod("lastmonth", time.Now()); err == nil {
+		scanWithProgress(sc, first.Start, out)
+	}
 	final, loopErr := usageUILoop(keys, out, sc, v, oldest, size, usageRefreshEvery)
 	fmt.Fprint(out, "\x1b[?1049l")
 	restore()

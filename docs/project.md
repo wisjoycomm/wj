@@ -20,10 +20,10 @@ Job có sẵn: `unity`, `web`, `go`, `python`.
 
 Kit có hai lớp, cùng một nguồn (`kit/base` và `kit/orca`):
 
-| Mức | Có gì | Cần `wj` trên máy? |
+| Mức | Có gì | Agent cần `wj`? |
 |---|---|---|
 | Lite (`wj init -lite`) | `AGENTS.md`, `CLAUDE.md`, rule theo job, `.gitignore`, và `.claude/settings.json` với file cấm đọc, giới hạn output Bash, quyền git | Không |
-| Đủ (`wj init`) | Lite + hook `wj guard`, skill `/orca-orchestrator` và `/orca-dream`, subagent `orca-worker`, `PLAN.md` | Có |
+| Đủ (`wj init`) | Lite + skill `/orca-orchestrator` và `/orca-dream`, subagent `orca-worker`, `PLAN.md`, và một hook chặn đọc cả file dài (gọi `wj guard`, tự bỏ qua khi máy không có `wj`) | Không. Chỉ hook dùng `wj` nếu có |
 
 - Lite vẫn tiết kiệm token nhờ thứ Claude Code tự cưỡng chế (rule deny, giới hạn output). Nó không có: chặn đọc cả
   file dài, chặn đường vòng qua shell (`cat .env`), và chạy task song song.

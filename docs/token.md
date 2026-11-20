@@ -1,17 +1,16 @@
 # Token
 
 Đọc thẳng file phiên của Claude Code, Codex, OpenCode và Antigravity trên máy này (Claude, Codex: file `.jsonl`;
-OpenCode: file cơ sở dữ liệu `opencode.db`; Antigravity: một file SQLite cho mỗi cuộc trò chuyện). Không cần proxy, không gọi mạng, không dùng token, tính cả
-phiên mở từ Orca. Các worktree của một repo gộp về một project.
+OpenCode: file cơ sở dữ liệu `opencode.db`; Antigravity: một file SQLite cho mỗi cuộc trò chuyện). Không cần proxy, không dùng token, tính cả
+phiên mở từ Orca. Mạng chỉ dùng để lấy bảng giá mới, mỗi ngày một lần (xem "Quy đổi tiền"). Các worktree của một repo gộp về một project.
 
 ## Lệnh
 
 ```text
-wj top                    bảng trực tiếp, project vừa chạy lên đầu (Ctrl+C để thoát)
-wj top -once              in một lần
-wj overlay                cửa sổ nhỏ luôn nổi trên màn hình
+wj usage                  báo cáo hôm nay, tự cập nhật, dòng gõ lệnh ở dưới để đổi kỳ/bộ lọc (xem "Xem theo ngày")
+wj overlay                cửa sổ nhỏ luôn nổi trên màn hình, cùng kỳ với wj usage (hôm nay / tuần / tháng)
+wj overlay -period week   mở với kỳ tuần này
 wj overlay stop           đóng overlay
-wj usage                  báo cáo hôm nay, dòng gõ lệnh ở dưới để đổi kỳ/bộ lọc (xem "Xem theo ngày")
 wj usage week             in một lần rồi thoát (cho script); còn lastweek, month, 2026-11-09...
 wj usage -since 24h       bảng cũ theo project + app
 wj usage -by project-model   từng model trong mỗi project
@@ -25,7 +24,7 @@ wj usage analytics week   token đi đâu, vì sao tốn (xem "Phân tích"); kh
 
 `-since 168h` đổi khoảng thời gian của bảng cũ (mặc định 24 giờ). `wj usage -all` lấy toàn bộ.
 
-Trong menu `wj`: AI Agent → Xem token, có đủ `wj top`, mở/đóng overlay và `wj usage`.
+Trong menu `wj`: AI Agent → Xem token, có `wj usage` và mở/đóng overlay. Lệnh `wj top` cũ đã bỏ: màn hình `wj usage` tự làm mới mỗi 5 giây nên thay được nó.
 
 ## Xem theo ngày, tuần, tháng
 
@@ -63,7 +62,9 @@ kỳ đang xem, kèm dung lượng và ≈USD của từng project. Thoát xong,
 để bạn kéo lên xem hoặc copy.
 
 Màn hình này cần terminal đủ lớn (từ 70 cột và 16 dòng). Nhỏ hơn hoặc terminal không hỗ trợ thì `wj usage` quay về
-kiểu gõ lệnh từng dòng như trước. Lần mở đầu tiên đọc cả tháng nên mất vài giây; mỗi lần bấm phím sau đó khoảng 0.1 giây.
+kiểu gõ lệnh từng dòng như trước. Lần mở đầu tiên đọc phiên của tháng trước tới nay; trong lúc đó có một dòng
+chạy `Đang đọc phiên Claude Code, Codex: 42% (310 MB / 740 MB, 6s)`, rồi `đang đọc OpenCode, Antigravity... xong.`
+Mỗi lần bấm phím sau đó khoảng 0.1 giây.
 
 Đầu báo cáo có bảng **Các kỳ**: ngày, tuần và tháng chứa kỳ đang xem (đang xem hôm nay thì là hôm nay, tuần này,
 tháng này; lùi về 2026-10-20 thì là ngày đó, tuần W43, tháng 10), với số session, lượt, token và ≈USD; kỳ đang xem
@@ -177,33 +178,9 @@ Lưu ý:
 - **Một session chạy qua nhiều ngày** hiện ở mỗi ngày với phần của ngày đó trong bảng "Theo ngày", nhưng trong bảng
   session thì tính cả kỳ.
 
-## wj top
-
-Cùng báo cáo với overlay mở rộng, thêm số lượt và cache tách đọc/ghi:
-
-```text
-  PROJECT            APP     LẦN CUỐI  MODEL              LƯỢT   VÀO      RA  ĐỌC CACHE  GHI CACHE   TỔNG    ≈USD
-● endlesswinter      claude  vừa xong  2 model             444   906  193.5k      49.3M     609.0k  50.1M   $9.11
-  └                  claude  vừa xong  claude-sonnet-5-5   413   830  175.5k      47.2M     550.3k  47.9M   $7.85
-  └                  claude  2 phút    claude-opus-5-5      31    76   18.0k       2.1M      58.7k   2.2M   $1.26
-○ game               claude  đang mở                         0     0       0          0          0      0      $0
-```
-
-- `●` dùng token trong 2 phút, `○` có phiên Claude Code đang mở (kể cả chưa dùng token).
-- Project dùng nhiều model có thêm một dòng `└` cho mỗi model.
-- Terminal hẹp thì gộp cache thành một cột, hẹp nữa thì bỏ cột MODEL (model ghi sau `└`).
-  Terminal thấp thì bớt dòng, ghi `...và N project khác`.
-- Dùng nhiều app (Claude, Codex, OpenCode, Antigravity) thì có thêm dòng `Theo app`.
-
 ## Tổng cả máy
 
-`wj top` có dòng tổng mọi project:
-
-```text
-Cả máy: 24 giờ 7.7M · 7 ngày 173.6M · 30 ngày 812.1M · toàn bộ 986.3M
-```
-
-Overlay hiện tổng cả máy trong khoảng đang xem, thêm 7 ngày và 30 ngày.
+Overlay có dòng tổng mọi project: kỳ đang xem, thêm 24 giờ, 7 ngày, 30 ngày.
 
 ## Overlay
 
@@ -216,8 +193,9 @@ Hiện tối đa 20 project:
 - **Codex**: có dùng token trong 10 phút gần nhất. Codex không ghi lại session đang mở, nên
   session Codex nghỉ lâu hơn sẽ tạm ẩn cho đến lượt dùng tiếp theo.
 
-Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi dòng tính trong khoảng
-đang xem (mặc định 24 giờ). Dòng đầu là tổng cả máy, ví dụ `24h 7.7M · 7d 173.6M · 30d 812.1M`.
+Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi dòng tính trong kỳ đang
+xem, giống `wj usage`: hôm nay (mặc định), tuần này (từ thứ Hai) hoặc tháng này, theo ngày dương lịch của máy chứ
+không phải 24 giờ gần nhất. Vì vậy số trên overlay khớp với `wj usage today`, `week`, `month`.
 
 Nền overlay gần đục (mặc định 92%) để chữ đọc rõ trên mọi nền, có viền mỏng. Chữ luôn đặc hoàn toàn.
 Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề; các model thụt vào dưới project.
@@ -225,7 +203,7 @@ Muốn thấy phần bên dưới thì chỉnh độ trong suốt (xem "Menu chu
 
 Bấm đúp vào overlay (hoặc chuột phải, chọn Mở rộng) để xem báo cáo: app, lần dùng gần nhất,
 model, token vào, ra, cache và số tiền quy đổi của từng project, thêm cả project đã đóng trong
-khoảng đang xem và tổng cả máy. Project dùng nhiều model có thêm một dòng cho mỗi model; nếu có
+kỳ đang xem và tổng cả máy. Project dùng nhiều model có thêm một dòng cho mỗi model; nếu có
 quá nhiều dòng thì project đó chỉ ghi `3 model`, xem đủ bằng `wj usage -by project-model`.
 Bấm đúp lần nữa để thu gọn. Mỗi lần mở overlay đều bắt đầu ở dạng thu gọn.
 
@@ -237,7 +215,7 @@ wj overlay -warn 5M
 
 Dòng tổng hiện `16.5M/5M`, chuyển vàng từ 80% ngưỡng và đỏ khi vượt. Dưới dòng tổng có thanh
 đo: xanh lá khi dưới 80%, vàng từ 80%, đỏ khi vượt ngưỡng. Thanh này chỉ hiện khi có `-warn`.
-Ngưỡng do mình tự đặt, tính trên tổng cả máy trong khoảng đang xem (`-since`, hoặc đổi trong menu
+Ngưỡng do mình tự đặt, tính trên tổng cả máy trong kỳ đang xem (`-period`, hoặc đổi trong menu
 chuột phải). Mặc định không cảnh báo.
 
 Đây không phải limit thật của nhà cung cấp. Số token không cho biết còn lại bao nhiêu: gói Claude
@@ -248,15 +226,15 @@ xem bằng `/usage`, còn gateway xem trên trang của gateway.
 Chuột phải vào overlay mở menu:
 
 - **Mở rộng / Thu gọn (bấm đúp)**: như bấm đúp.
-- **Khoảng thời gian**: 1 giờ, 24 giờ, 7 ngày. Đổi khoảng đang xem, không cần mở lại.
+- **Kỳ (như wj usage)**: hôm nay, tuần này, tháng này. Đổi kỳ đang xem, không cần mở lại.
 - **Độ trong suốt**: đặt độ đục của nền 40%, 60%, 80%, 92%, 100% (mặc định 92%; 100% là nền đặc, không thấy phần bên dưới).
 - **Cỡ chữ**: 85%, 100%, 125%, 150% (mặc định 100%).
 - **Đóng overlay**.
 
-Kéo để đổi chỗ. Vị trí, khoảng thời gian, độ trong suốt và cỡ chữ được lưu trong `overlay.json`
+Kéo để đổi chỗ. Vị trí, kỳ, độ trong suốt và cỡ chữ được lưu trong `overlay.json`
 cho lần mở sau. Overlay tự đổi cỡ theo DPI của màn hình đang đứng và luôn nằm trong vùng làm việc
 của màn hình (không bị kéo ra khỏi màn hình). Hiện chỉ có trên Windows; macOS và Linux dùng
-`wj top` trong một cửa sổ terminal nhỏ.
+`wj usage` trong một cửa sổ terminal nhỏ.
 
 ## Đọc số thế nào
 
@@ -270,14 +248,17 @@ Token tăng vọt bất thường: xem [Giảm context](context.md).
 
 ## Quy đổi tiền
 
-Có trong `wj usage`, `wj top` và overlay mở rộng, không có ở overlay thu gọn.
+Có trong `wj usage` và overlay mở rộng, không có ở overlay thu gọn.
 
 Đây là phép quy đổi, không phải số tiền thật phải trả: gói Pro/Max là phí cố định, còn gateway
 có giá riêng. Dùng để so sánh project và model với nhau.
 
 - Mỗi lượt gọi tính theo đúng model, loại token, cache 5 phút hay 1 giờ, và mức giá theo độ dài prompt.
-- Bảng giá lấy từ danh sách công khai của OpenRouter, nhúng sẵn trong `wj` nên không gọi mạng.
-  Ngày của bảng giá in dưới bảng. Cập nhật cùng bản phát hành bằng `scripts/update-prices.sh`.
+- Bảng giá lấy từ danh sách công khai của OpenRouter (https://openrouter.ai/api/v1/models). Một bản nhúng sẵn
+  trong `wj` (cập nhật mỗi bản phát hành bằng `scripts/update-prices.sh`). Màn hình `wj usage` và overlay tự tải bản
+  mới mỗi ngày một lần vào `~/.wj/prices.json`, nên model ra sau bản `wj` đang cài cũng có giá. `wj usage` chạy
+  trong script, pipe hay `-json` không gọi mạng: chỉ dùng bản đã lưu. Mất mạng thì giữ bản cũ. Tắt hẳn:
+  `WJ_PRICES_UPDATE=off`. Ngày của bảng giá in dưới bảng.
 - Model không có trong bảng giá không bị đoán: `?` là chưa có giá, `$12.00+` là còn token chưa
   tính. Model có tên riêng của gateway thường rơi vào trường hợp này.
 - Không tính fast mode, batch, inference theo vùng và phí công cụ như web search.
@@ -297,7 +278,7 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 - Chỉ tính được khi file phiên còn trên máy.
 - Số liệu của từng máy riêng, không cộng giữa các máy.
 - **Cursor chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy, nên không có
-  mặt trong `wj usage` và `wj top`. Báo cáo chỉ gồm các app ghi trong dòng đầu.
+  mặt trong `wj usage`. Báo cáo chỉ gồm các app ghi trong dòng đầu.
 - App khác đo bằng `wj proxy run` và `wj proxy usage`. Xem `wj help proxy`.
 
 ## Phiên đang mở
