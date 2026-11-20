@@ -35,7 +35,7 @@ Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or
   - After editing: save the scene/prefab through MCP, read the console again, and capture the Game view if the server has a screenshot tool.
 
 ## 5. Verify
-Never run `wj`. Verify by hand: `git status --short` (only Scope files are yours to judge), then run the Verify
+Verify by hand: `git status --short` (only Scope files are yours to judge), then run the Verify
 command from your row. If Verify is `-`: report BLOCKED `Verify needed`, do not guess. Exit 0 is PASS, non-zero is FAIL,
 a missing tool or dependency is NOT_VERIFIED:
 

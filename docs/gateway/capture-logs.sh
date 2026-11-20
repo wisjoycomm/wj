@@ -3,13 +3,21 @@
 # Header Authorization duoc che. Can: bash, curl, jq.
 # Chay: bash capture-logs.sh <thu-muc-ra>
 unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy ALL_PROXY all_proxy
+# Gateway: dat GATEWAY_URL + GATEWAY_KEY (+ GATEWAY_MODEL), hoac WJ_PROFILE=<ten> de lay tu ~/.wj/profiles/<ten>.json.
+P="$HOME/.wj/profiles/${WJ_PROFILE:-none}.json"
+if [ -n "${WJ_PROFILE:-}" ] && [ -f "$P" ]; then
+  : "${GATEWAY_URL:=$(jq -r '.base_url // empty' "$P")}"
+  : "${GATEWAY_KEY:=$(jq -r '.credential // empty' "$P")}"
+  : "${GATEWAY_MODEL:=$(jq -r '[.models[]? | select(test("haiku"))][0] // empty' "$P")}"
+fi
 K="${GATEWAY_KEY:-}"
-[ -z "$K" ] && [ -f ~/.wj/profiles/adnx.json ] && K=$(jq -r .credential ~/.wj/profiles/adnx.json)
-[ -z "$K" ] && { echo "Thieu key: export GATEWAY_KEY=..."; exit 1; }
+if [ -z "${GATEWAY_URL:-}" ] || [ -z "$K" ]; then echo "Thieu gateway: dat GATEWAY_URL va GATEWAY_KEY, hoac WJ_PROFILE=<ten>"; exit 1; fi
+if [ -z "${GATEWAY_MODEL:-}" ]; then echo "Thieu model: dat GATEWAY_MODEL (model re nhat cua gateway, vd ban haiku)"; exit 1; fi
+BASE="${GATEWAY_URL%/}"; BASE="${BASE%/v1}"
+URL="$BASE/v1/messages"
+MODEL="$GATEWAY_MODEL"
 OUT="${1:-logs}"; mkdir -p "$OUT"
 
-URL=https://ai.adnx.vn/v1/messages
-MODEL=cc/claude-haiku-4-5-20251001
 HDRS=('anthropic-version: 2023-06-01' 'anthropic-beta: advanced-tool-use-2025-11-20'
       'content-type: application/json' 'User-Agent: wj-gateway-client/1' 'x-app: wj')
 

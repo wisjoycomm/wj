@@ -213,7 +213,7 @@ func TestInitLiteNeedsNoWj(t *testing.T) {
 	runInitIn(t, root, "-type", "web")
 	settings = readText(t, filepath.Join(root, ".claude", "settings.json"))
 	agents = readText(t, filepath.Join(root, "AGENTS.md"))
-	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "Never run `wj` yourself") {
+	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "## Orca: plan and parallel workers") {
 		t.Error("a full run after a lite one must add the Orca layer")
 	}
 	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {

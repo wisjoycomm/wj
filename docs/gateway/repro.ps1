@@ -1,19 +1,27 @@
-# Tai hien loi tool_reference cua gateway ai.adnx.vn (Windows PowerShell 5.1+ / pwsh).
-# Key lay tu $env:GATEWAY_KEY (hoac ~/.wj/profiles/adnx.json neu co).
+# Tai hien loi tool_reference cua mot gateway (proxy API ben thu ba). Windows PowerShell 5.1+ / pwsh.
+# Gateway: dat $env:GATEWAY_URL + $env:GATEWAY_KEY (+ $env:GATEWAY_MODEL), hoac $env:WJ_PROFILE=<ten>
+# de lay tu ~/.wj/profiles/<ten>.json.
 # Goi THANG gateway, khong qua proxy (proxy wj se sua request va che mat loi).
 # Chay: powershell -ExecutionPolicy Bypass -File repro.ps1
 Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY -ErrorAction SilentlyContinue
-$K = $env:GATEWAY_KEY
-$wj = Join-Path $HOME ".wj\profiles\adnx.json"
-if (-not $K -and (Test-Path $wj)) { $K = (Get-Content $wj -Raw | ConvertFrom-Json).credential }
-if (-not $K) { Write-Host 'Thieu key: $env:GATEWAY_KEY="..."'; exit 1 }
-
-$Model = "cc/claude-haiku-4-5-20251001"
+$Url = $env:GATEWAY_URL; $K = $env:GATEWAY_KEY; $Model = $env:GATEWAY_MODEL
+if ($env:WJ_PROFILE) {
+  $wj = Join-Path $HOME ".wj\profiles\$($env:WJ_PROFILE).json"
+  if (Test-Path $wj) {
+    $p = Get-Content $wj -Raw | ConvertFrom-Json
+    if (-not $Url) { $Url = $p.base_url }
+    if (-not $K) { $K = $p.credential }
+    if (-not $Model) { $Model = @($p.models | Where-Object { $_ -match 'haiku' })[0] }
+  }
+}
+if (-not $Url -or -not $K) { Write-Host 'Thieu gateway: dat $env:GATEWAY_URL va $env:GATEWAY_KEY, hoac $env:WJ_PROFILE'; exit 1 }
+if (-not $Model) { Write-Host 'Thieu model: dat $env:GATEWAY_MODEL (model re nhat cua gateway, vd ban haiku)'; exit 1 }
+$Url = ($Url.TrimEnd('/') -replace '/v1$', '') + '/v1/messages'
 $f = Join-Path $env:TEMP "gw-test-body.json"
 
 function Send($label, $obj) {
   [IO.File]::WriteAllText($f, ($obj | ConvertTo-Json -Depth 20 -Compress))
-  $out = curl.exe -s -N --noproxy "*" -w "`n__HTTP__%{http_code}" https://ai.adnx.vn/v1/messages `
+  $out = curl.exe -s -N --noproxy "*" -w "`n__HTTP__%{http_code}" $Url `
     -H "Authorization: Bearer $K" -H "anthropic-version: 2023-06-01" `
     -H "anthropic-beta: advanced-tool-use-2025-11-20" -H "content-type: application/json" `
     -H "User-Agent: wj-gateway-client/1" -H "x-app: wj" --data-binary "@$f"

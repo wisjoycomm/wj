@@ -1,7 +1,7 @@
 # Which model runs which task
 
 The orchestrator reads this file when it plans and writes the result in the Agent column of PLAN.md.
-It is yours to edit: `wj init` never overwrites it. It is not loaded into sessions, so it costs no tokens
+It is yours to edit: kit updates never overwrite it. It is not loaded into sessions, so it costs no tokens
 until a plan is made.
 
 ## By kind of work
@@ -25,8 +25,9 @@ For every task no row above fits.
 ## Models of other vendors
 A worker can run on any model the gateway serves to Claude Code (GPT, Gemini, DeepSeek...). To use one:
 
-1. I run `wj models test` outside the agent: take only an id that shows `OK` in the Claude Code column.
-2. I run `wj plan worker <id>` outside the agent: it creates that model's worker. Commit it and reopen Claude Code.
+1. I check that the model id works in Claude Code with a short session.
+2. I create that model's worker `.claude/agents/orca-worker-<id slug>.md` (a copy of `orca-worker.md` with
+   `model: <id>`). Commit it and reopen Claude Code.
 3. Write `claude:<id>` in the Agent cell of the rows it should take, for example
    `| UI: layout, styling, components, visual polish, accessibility | claude:cx/gpt-6.1-sol |`.
 

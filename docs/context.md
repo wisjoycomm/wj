@@ -17,7 +17,7 @@ Chưa rõ nó tính vào hạn mức gói subscription theo tỷ lệ nào.
 ## Trước tiên: loại trừ lỗi gateway
 
 Nếu file phiên có một trong hai dòng sau thì không phải do cách làm việc, mà do gateway làm hỏng tool search
-(+~280k mỗi lượt). Xem [gateway-adnx.md](gateway-adnx.md).
+(+~280k mỗi lượt). Xem [gateway.md](gateway.md).
 - `Tool references removed - tool search not enabled`
 - `ToolSearch is no longer available`
 

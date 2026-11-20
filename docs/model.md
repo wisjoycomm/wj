@@ -63,7 +63,7 @@ ldplayer) mỗi lượt thêm khoảng 280k token đọc cache.
 
 Dấu hiệu trong file phiên: `[Tool references removed - tool search not enabled]`.
 
-Ngày 2026-11-11 gateway ai.adnx.vn đã sửa lỗi này: `tool_reference` tên gốc chạy với mọi tool đã thử (43/43). Bằng chứng, lỗi phụ còn lại và script kiểm tra lại: [gateway-adnx.md](gateway-adnx.md).
+Gateway đã điều tra sửa lỗi này ngày 2026-11-11: `tool_reference` tên gốc chạy với mọi tool đã thử (43/43). Bằng chứng, lỗi phụ còn lại và script kiểm tra lại: [gateway.md](gateway.md) (script kiểm tra dùng được cho mọi gateway).
 
 Với gateway khác còn lỗi này, cần báo gateway đổi tên cả `tool_reference.tool_name`. Trong lúc chờ, chạy Claude
 qua proxy đo token (`wj proxy run claude` hoặc `wj proxy project on` + `wj proxy start`): khi

@@ -21,8 +21,6 @@ Input for this turn: $ARGUMENTS
 A worker's result arrives by itself when it finishes: do step 3 for it then. Never poll for it.
 
 ## 0. Modes
-Never run `wj`, even if it is installed: it is a tool I run myself, outside the agent. Do every step by hand as written here.
-
 Run `orca status` once per session.
 - It prints `runtimeReachable: true`: Orca mode. Workers are started with the `orca` CLI.
 - `orca` not found, or the runtime is not reachable: subagent mode. Tell me once: "Orca not running, workers run

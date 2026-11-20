@@ -17,10 +17,10 @@ Days to look back: $ARGUMENTS (use 7 if that is empty).
 
 ## 1. Get the digest
 
-This skill needs a digest of the recent sessions: transcripts are too big to read by hand. Never run `wj`
-yourself. I run `wj digest -days 7` outside the agent. If the digest is not in my message (pasted, or a file
-path, usually under `.tmp/`), reply in one line (`/orca-dream needs the output of wj digest: run it and paste it
-or give me the file`) and stop. For one session's errors, ask me to run `wj digest -session <id>`.
+This skill works from a digest of the recent sessions that I give you: transcripts are too big to read by hand.
+If the digest is not in my message (pasted, or a file path, usually under `.tmp/`), reply in one line
+(`/orca-dream needs a session digest: paste it or give me the file`) and stop. For one session's errors, ask
+me for that session's digest.
 
 The digest covers every session and subagent transcript of this repo, in all its worktrees, in compact form.
 Never open a transcript `.jsonl` file yourself: they are many megabytes.
@@ -61,7 +61,7 @@ In this order. A fix the harness enforces beats a sentence a model has to rememb
    job by hand (even a single step), propose a reusable script (as AGENTS.md "Reuse, don't repeat" says) plus a skill that says when and how to run it.
 4. **A lesson** (a convention or a pitfall of this project): one line under `## Lessons` in `AGENTS.md`. It is
    committed, so the team, every worker and every other coding agent get it, and git keeps its history.
-   Write it outside the `wj:begin` / `wj:end` blocks, which my tooling rewrites; add the heading at the end of
+   Write it outside the generated blocks (between `<!-- ...:begin ... -->` and `<!-- ...:end ... -->` lines), which get rewritten; add the heading at the end of
    the file if it is not there.
 5. **A fact of this machine only** (where a tool is installed, a local port): one line under `## Lessons` in
    `CLAUDE.local.md`, which is gitignored.

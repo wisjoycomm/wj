@@ -64,7 +64,7 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
   trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
 
-`wj` là tool **bạn** chạy, ngoài agent. Rule, skill và worker dặn agent không bao giờ tự chạy `wj`: chúng làm tay
+`wj` là tool **bạn** chạy, ngoài agent. Rule, skill và worker không nhắc tới `wj` nên agent không dùng nó: chúng làm tay
 mọi bước (Grep `PLAN.md`, tự chạy lệnh Verify, tự ghi archive). Chỉ hook `wj guard` là harness gọi, và nó tự bỏ qua
 khi máy không có `wj`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
 lite không có file này); `wj init -update` ghi lại số mới. Project cài bằng

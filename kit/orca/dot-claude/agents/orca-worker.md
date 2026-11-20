@@ -29,7 +29,7 @@ Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or
 - Never edit PLAN.md. Scratch files go in `.tmp/`.
 
 ## 4. Verify
-Never run `wj`. Verify by hand, from your worktree's root (for Unity projects set the Bash timeout to 600000):
+Verify by hand, from your worktree's root (for Unity projects set the Bash timeout to 600000):
 1. `git status --short`: every changed file must be inside Scope (see step 3), and PLAN.md must be untouched.
 2. Run the task's Verify command from your row. If Verify is `-`: `npm test --silent` (package.json with a test
    script), else `pytest -q --tb=short --maxfail=1`, else `go test ./...`. Unity: no auto-detect, report
