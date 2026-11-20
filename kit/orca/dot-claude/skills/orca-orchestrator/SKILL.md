@@ -202,6 +202,7 @@ Both modes:
   find it): adjust Scope or Verify, split the task, or add a dependency.
 - When every worker you started has reported, show me the changed rows and, for each DONE or PARTIAL task, the
   command to review it: `git --no-pager diff HEAD...<branch>`. Never merge on your own.
+- A large diff with zero review findings is itself a finding: re-check it, and never report it as clean.
 
 ## 4. Merge and archive
 Only when I say so. `merge` alone means every `DONE` task; otherwise only the tasks I name.
