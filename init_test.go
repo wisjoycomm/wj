@@ -269,7 +269,9 @@ func TestKitSkillsCallOnlyWj(t *testing.T) {
 	}
 }
 
-func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
+func TestInitUpdateMergesOldSkillsAndRemovesOldScripts(t *testing.T) {
+	calls := 0
+	fakeMerger(t, &calls)
 	root := t.TempDir()
 	skill := filepath.Join(root, ".claude", "skills", "orca-orchestrator", "SKILL.md")
 	oldWorker := filepath.Join(root, ".claude", "skills", "orca-stateless-worker")
@@ -281,17 +283,14 @@ func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
 	writeTestFile(t, filepath.Join(root, ".claude", "settings.json"), `{"env":{"MINE":"1","CLAUDE_CODE_GLOB_NO_IGNORE":"true"}}`)
 
 	output := runInitIn(t, root)
-	if readText(t, skill) != "old skill printing launch commands" || !strings.Contains(output, "wj init -update") {
-		t.Fatalf("a plain rerun must keep the old skill and say how to update:\n%s", output)
+	if got := readText(t, skill); !strings.HasPrefix(got, "old skill printing launch commands") || !strings.Contains(got, "orca-worker") {
+		t.Fatalf("a rerun must merge the kit's skill into the old one, keeping it:\n%s\n%s", got, output)
 	}
 	if _, err := os.Stat(script); err != nil {
 		t.Fatal("a plain rerun must keep what the old skills call")
 	}
 
 	runInitIn(t, root, "-update")
-	if !strings.Contains(readText(t, skill), "orca-worker") {
-		t.Error("skill not replaced by the kit's")
-	}
 	if backups, _ := filepath.Glob(skill + ".bak-*"); len(backups) != 1 {
 		t.Errorf("want one backup of the old skill, got %d", len(backups))
 	}
@@ -301,8 +300,8 @@ func TestInitUpdateReplacesOldSkillsAndScripts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
 		t.Error("the worker subagent must be installed")
 	}
-	if readText(t, filepath.Join(root, "CLAUDE.md")) != "mine" {
-		t.Error("-update must not touch CLAUDE.md")
+	if got := readText(t, filepath.Join(root, "CLAUDE.md")); !strings.HasPrefix(got, "mine") {
+		t.Errorf("CLAUDE.md must keep the user's text:\n%s", got)
 	}
 	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
 	if !strings.Contains(settings, `"MINE": "1"`) || !strings.Contains(settings, `"CLAUDE_CODE_GLOB_NO_IGNORE": "true"`) {

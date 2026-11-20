@@ -89,3 +89,21 @@ func TestDigestMemoryFollowsTheConfiguredFolder(t *testing.T) {
 		t.Errorf("empty project:\n%s", got)
 	}
 }
+
+func TestDigestMemoryFindsClaudeCodesOwnFolder(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
+	root := filepath.Join(t.TempDir(), "my.repo")
+	slug := claudeProjectSlug.ReplaceAllString(root, "-")
+	global := filepath.Join(home, ".claude", "projects", slug, "memory")
+	writeTestFile(t, filepath.Join(global, "a.md"), "plain note\n")
+	if got := memoryDir(root); got != global {
+		t.Errorf("memoryDir = %s, want Claude Code's own folder %s", got, global)
+	}
+	writeTestFile(t, filepath.Join(root, ".claude", "memory", "b.md"), "plain note\n")
+	if got := memoryDir(root); got != filepath.Join(root, ".claude", "memory") {
+		t.Errorf("a memory folder in the repo must win, got %s", got)
+	}
+}

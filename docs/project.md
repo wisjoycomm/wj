@@ -7,7 +7,8 @@ cd <project>
 wj init                    tự nhận job, hoặc hỏi
 wj init -type unity,web    chọn job
 wj init -dry-run           xem trước
-wj init -update            project cài bằng kit cũ: lấy skill Orca mới
+wj init -update            project cài bằng kit cũ: xoá file kit cũ (file khác bản kit luôn được gộp, xem dưới)
+wj init -no-merge          không nhờ Claude Code gộp file đã có
 wj init -lite              chỉ phần không cần wj (xem "Hai mức" bên dưới)
 wj init -remove            gỡ kit: chỉ phần của wj (khối wj trong AGENTS.md, file giống bản kit,
                            hook wj guard, quyền Orca); file bạn đã sửa giữ nguyên, file gỡ vào
@@ -68,8 +69,15 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 mọi bước (Grep `PLAN.md`, tự chạy lệnh Verify, tự ghi archive). Chỉ hook `wj guard` là harness gọi, và nó tự bỏ qua
 khi máy không có `wj`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
 lite không có file này); `wj init -update` ghi lại số mới. Project cài bằng
-kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
-`orca-stateless-worker` cũ. `CLAUDE.md` đã có thì tool không sửa; muốn lấy bản mới thì xoá file rồi chạy lại `wj init`.
+kit cũ: `wj init -update` xoá script `.ps1` và skill `orca-stateless-worker` cũ.
+
+**File đã có và khác bản kit không bao giờ bị ghi đè.** Mỗi lần `wj init` (có hay không `-update`, kể cả bản sửa của
+`wj doctor`), tool nhờ Claude Code (`claude -p`, chạy ngoài project) gộp bản kit vào file của bạn: giữ mọi dòng bạn
+viết, thêm phần kit mới có, chỗ hai bên nói khác nhau thì giữ của bạn. Bản cũ sao lưu `.bak-<giờ>`. Bản gộp ngắn hơn
+hẳn file của bạn thì bị bỏ và file giữ nguyên. Kit đã gộp vào file nào ghi trong `.claude/wj-merged.json` (commit
+file này), nên chạy lại với cùng bản kit thì không hỏi agent nữa. Không có lệnh `claude`, hoặc `-no-merge`: file giữ
+nguyên. `-dry-run` chỉ báo file nào sẽ được gộp. `PLAN.md`, `PLAN-ARCHIVE.md` và `.claude/models.md` là của bạn,
+không bao giờ gộp.
 
 Xong thì commit các file này, vì worktree của worker chỉ thấy file đã commit, rồi mở lại Claude Code để nó nhận
 subagent và settings mới.
@@ -301,6 +309,10 @@ một phiên; đọc theo khoảng (`offset` + `limit`) không tính. Một kế
 mọi lượt sau, nên nó tốn hơn nhiều so với kích thước của chính nó. `/orca-dream` xử lý dòng nào lặp từ 2 lần hoặc
 lớn từ 20.000 token: thêm rule deny, thêm cờ quiet vào lệnh Verify, hoặc một dòng rule. Token ở đây là ước lượng
 (số ký tự / 4), không phải số đo từ gateway.
+
+**Memory ở đâu.** Digest đọc thư mục `autoMemoryDirectory` nếu settings có; không có thì `.claude/memory/` của repo;
+không có nữa thì thư mục mặc định của Claude Code, `~/.claude/projects/<đường dẫn repo, ký tự lạ thành ->/memory`.
+Dòng MEMORY ghi rõ thư mục đã đọc. Chỉ memory của project này; `~/.claude/CLAUDE.md` và memory project khác không đụng.
 
 **Lọc memory.** Mục MEMORY của digest liệt kê mỗi ghi chú một dòng (file, loại, tuổi, số dòng, mô tả), cũ nhất
 trước. `MISSING:` nghĩa là ghi chú nhắc tới một đường dẫn không còn trong project; đây là gợi ý để kiểm tra, không

@@ -77,7 +77,7 @@ the public install commands fetch the latest **published** binary, not local cha
 wj init                  ask which job this is (detected ones are suggested)
 wj init -type unity,web  choose directly
 wj init -dry-run         preview, write nothing
-wj init -update          project set up by an older kit: take the current Orca skills
+wj init -update          project set up by an older kit: remove old kit files
 wj init -remove          take the kit out: only what wj owns, your edits stay; removed
                          files go to the recycle bin. With -dry-run it only lists
 ```
@@ -106,9 +106,10 @@ Existing files are safe. Files that already exist are kept and reported, includi
 edited skills. In `AGENTS.md` only the text between `wj:begin` and `wj:end` markers
 is refreshed, and shared rules are not added to an `AGENTS.md` that wj did not
 create. `.claude/settings.json` and `.gitignore` only gain entries, and a rule you
-already set is left as it is. `-update` replaces Orca skills that differ from the
-kit's (the old file is backed up) and removes what older kits installed: the `.ps1`
-scripts and the `orca-stateless-worker` skill.
+already set is left as it is. A file that differs from the kit's is never overwritten:
+wj asks Claude Code (`claude -p`) to merge the kit's version into it, keeping every line
+you wrote, and backs the old file up (`-no-merge` skips this). `-update` also removes
+what older kits installed: the `.ps1` scripts and the `orca-stateless-worker` skill.
 
 You talk to one Claude Code session. `/orca-orchestrator <goal>` plans
 tasks into `PLAN.md`; `/orca-orchestrator go` starts each ready task as a worker in its

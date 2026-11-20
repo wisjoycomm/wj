@@ -98,7 +98,8 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	flags.SetOutput(out)
 	types := flags.String("type", "", "loại job, vd unity hoặc web,go (bỏ trống thì tool hỏi)")
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
-	update := flags.Bool("update", false, "thay skill Orca cũ trong project bằng bản của kit (bản cũ sao lưu .bak)")
+	update := flags.Bool("update", false, "lấy bản kit mới: file khác bản kit được Claude Code gộp vào (bản cũ sao lưu .bak), xoá file kit cũ")
+	noMerge := flags.Bool("no-merge", false, "không nhờ Claude Code gộp: file đã có và khác bản kit giữ nguyên")
 	lite := flags.Bool("lite", false, "chỉ cài phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook)")
 	remove := flags.Bool("remove", false, "gỡ kit khỏi project: chỉ phần của wj, file bạn đã sửa giữ nguyên (vào thùng rác)")
 	if err := flags.Parse(args); err != nil {
@@ -128,6 +129,14 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	stacks, err := chooseStacks(*types, root, input, out)
 	if err != nil {
 		return err
+	}
+	if !*noMerge {
+		if *dry {
+			initMergePreview = true
+		} else {
+			initMerger = newInitMerger(out)
+		}
+		defer func() { initMerger, initMergePreview = nil, false }()
 	}
 	changes, err := planInit(root, stacks, *update, *lite)
 	if err != nil {
@@ -194,6 +203,8 @@ func detectStacks(root string) []string {
 
 func planInit(root string, stacks []string, update, lite bool) ([]initChange, error) {
 	var changes []initChange
+	initMergeState = loadMergedKits(root)
+	defer func() { initMergeState = nil }()
 	for _, layer := range kitLayers(lite) {
 		copied, err := planLayer(root, layer, update, kitOverrides(stacks))
 		if err != nil {
@@ -226,6 +237,9 @@ func planInit(root string, stacks []string, update, lite bool) ([]initChange, er
 		if err != nil {
 			return nil, err
 		}
+		changes = append(changes, change)
+	}
+	if change, ok := initMergeState.change(); ok {
 		changes = append(changes, change)
 	}
 	// The skills read the version file, so a lite kit has no use for it.
@@ -320,13 +334,10 @@ func planLayer(root, layer string, update bool, overrides map[string]string) ([]
 		if err != nil {
 			return err
 		}
-		// The Orca skills are wj's own files: an older copy can be replaced on request.
-		if strings.HasPrefix(change.status, "giữ nguyên") && contains(orcaSkillFiles, rel) {
-			if update {
-				change = initChange{path: change.path, text: string(data), write: true, backup: true, status: "cập nhật (bản cũ: .bak)"}
-			} else {
-				change.status += " - lấy bản mới: wj init -update"
-			}
+		// A file the project has in another form is never overwritten: an agent merges
+		// the kit's version into it (see init_merge.go).
+		if strings.HasPrefix(change.status, "giữ nguyên") {
+			change = mergeChange(change, rel, string(data), initMergePreview)
 		}
 		changes = append(changes, change)
 		return nil
