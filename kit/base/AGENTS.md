@@ -4,6 +4,7 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 
 ## Read less
 - Find before you read: locate files and symbols first. A file you only look something up in: read the lines you need.
+- `.claude/map.md`, when the repo has it, lists every folder with its scripts, its assets by kind and its main files. Read it to find where something lives before a wide search.
 - A file you are going to change: read it whole when it is under 500 lines. For a longer one, search for the part you need and read that range; one read loads at most 500 lines.
 - Before you change a function or a type, search for where it is used, and read the rest of its file when the change touches something other code shares. Don't edit from a fragment you have not understood: reading more costs less than a wrong fix.
 - Never read lockfiles, generated files, build output or caches, with a file tool or through the shell (`cat`, `grep`, `head`...).

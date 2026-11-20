@@ -32,9 +32,11 @@ thay, rồi in bản rút gọn:
   SESSIONS   mỗi phiên: số lượt, context lớn nhất, số lỗi
   WASTE      kết quả tool từ 8k token trở lên (gộp theo lệnh), và file bị đọc cả file
              từ 3 lần trong một phiên
-  MEMORY     ghi chú Claude Code tự ghi (.claude/memory): loại, tuổi, số dòng, và
+  MEMORY     ghi chú Claude Code tự ghi (autoMemoryDirectory, .claude/memory hoặc
+             ~/.claude/projects/<repo>/memory): loại, tuổi, số dòng, và
              MISSING khi ghi chú nhắc tới đường dẫn không còn trong project
   LESSONS    số dòng mục "## Lessons" trong AGENTS.md và CLAUDE.local.md, dòng nào MISSING
+  MAP        ghi lại .claude/map.md (bản đồ file), số thư mục mới và chưa có Note
 
 Tính cả phiên chính, subagent, và mọi worktree của cùng repo. Lệnh chỉ đọc, không
 gửi gì đi đâu. Mỗi dòng có id phiên để trích dẫn.`
@@ -115,6 +117,7 @@ func runDigest(args []string, out io.Writer) error {
 	}
 	report.print(out, filepath.Base(root), *days)
 	printMemory(out, root, checkoutTop(dir), time.Now())
+	printProjectMap(out, root)
 	return nil
 }
 

@@ -68,7 +68,8 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 `wj` là tool **bạn** chạy, ngoài agent. Rule, skill và worker không nhắc tới `wj` nên agent không dùng nó: chúng làm tay
 mọi bước (Grep `PLAN.md`, tự chạy lệnh Verify, tự ghi archive). Chỉ hook `wj guard` là harness gọi, và nó tự bỏ qua
 khi máy không có `wj`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
-lite không có file này); `wj init -update` ghi lại số mới. Project cài bằng
+lite không có file này) mỗi lần chạy, và in các mục của `CHANGELOG.md` mới hơn số cũ: kit đổi gì kể từ lần trước.
+Project cài bằng
 kit cũ: `wj init -update` xoá script `.ps1` và skill `orca-stateless-worker` cũ.
 
 **File đã có và khác bản kit không bao giờ bị ghi đè.** Mỗi lần `wj init` (có hay không `-update`, kể cả bản sửa của
@@ -262,6 +263,20 @@ một Unity Editor (bản bạn đang mở) cho mọi việc cần Editor. Proje
 - Task cần Editor báo lỗi biên dịch ở một file: thêm một task `P0` sửa file đó (Scope là file đó), rồi chạy lại
   task bị chặn sau khi task sửa xong.
 - `merge` không còn gì để gộp: chỉ archive (chuyển dòng sang `PLAN-ARCHIVE.md` kèm hash commit).
+
+## Bản đồ file: .claude/map.md
+
+Mỗi thư mục một dòng: số script (theo ngôn ngữ), asset theo loại (scene, prefab, mat, img, audio, model, anim, data...),
+vài file chính (script lớn nhất, không có script thì vài asset đầu), và cột Note nói thư mục dùng để làm gì. Agent đọc
+nó để biết thứ gì nằm đâu trước khi tìm khắp repo (rule trong `AGENTS.md`). File được commit để cả nhóm dùng chung.
+
+- `wj init`, `wj digest` và `wj map` ghi lại các cột đếm từ danh sách file của git (bỏ `.meta`, file gitignore,
+  `.claude/`, `.tmp/`). Cột Note được giữ nguyên qua mỗi lần ghi.
+- Repo lớn không thành nghìn dòng: tool bắt đầu từ cả repo một dòng, rồi tách dần thư mục nặng nhất thành các thư mục
+  con, tối đa 250 dòng. Script nặng gấp 20 lần asset khi chọn thư mục để tách, nên phần code được chia kỹ hơn. Thử trên
+  một project Unity 240.000 file: 157 dòng, khoảng 5.800 token, chạy dưới một giây; agent chỉ đọc khi cần.
+- `/orca-dream` điền Note cho tối đa 15 dòng còn trống mỗi lần (thư mục mới trước) và đề xuất sửa Note đã sai, cùng
+  lúc với các đề xuất khác, chờ bạn duyệt.
 
 ## Memory và dreaming
 

@@ -102,7 +102,17 @@ Deleting a note means removing its file and its line in `MEMORY.md`. Also propos
 digest lists under `INDEX links notes that don't exist`, and adding or deleting the notes under `NOT IN INDEX`.
 At most 5 memory proposals per run, on top of the 5 above. Notes you did not get to wait for the next run.
 
-## 5. Propose, don't write
+## 5. Keep the file map useful
+The digest run also rewrites `.claude/map.md`: one row per folder with its scripts, assets by kind and main files,
+and a Note column that says what the folder is for. Its MAP line says how many folders are new and how many have no
+Note. The counts are wj's; the Notes are yours to fill, because agents use them to find where things live.
+
+- Fill the Note of up to 15 rows that have none (`-`), new folders first. Judge from the folder's file names: Glob
+  it, and read at most a few lines of one or two scripts. One short phrase, under 60 characters, no `|`.
+- A Note that no longer matches its row (the folder now holds other things): propose a new one.
+- Don't touch the other columns or the lines above the table: the next run rewrites them.
+
+## 6. Propose, don't write
 Reply with the proposals and stop. For each failure pattern:
 
 ```
@@ -112,6 +122,14 @@ Cause: <one or two sentences>
 Change: <file>
 - <old line, or "(new)">
 + <new line>
+```
+
+For the file map, one block for all its Notes:
+
+```
+### F. Notes for 8 folders in .claude/map.md
+`Assets/Scripts/Battle`: combat units and turn logic
+`Assets/Art/UI`: icons and panels of the menus
 ```
 
 For each memory note:
@@ -126,7 +144,7 @@ Delete: <note file> and its MEMORY.md line
 
 If nothing qualifies, say so in one line. That is a good result, not a failure.
 
-## 6. Apply what I approve
+## 7. Apply what I approve
 - Make exactly the approved changes, one Edit each. Don't touch the others.
 - Delete an approved note (the file named in the approved proposal, nothing else), then remove its line from `MEMORY.md`.
 - Don't commit: I review the diff first.

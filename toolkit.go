@@ -50,6 +50,8 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 		return runDigest(args[1:], out)
 	case "trash":
 		return runTrash(args[1:], out)
+	case "map":
+		return runMap(out)
 	case "guard":
 		return runGuard(args[1:], input, out)
 	case "init":
@@ -86,7 +88,7 @@ func runApp(args []string, input io.Reader, out io.Writer) error {
 
 // appCommands are the words runApp knows, for the "did you mean" of a typo.
 var appCommands = []string{"apps", "status", "configure", "update", "version", "auth", "tools", "proxy", "direct", "check",
-	"doctor", "plan", "verify", "digest", "trash", "guard", "init", "usage", "overlay", "models", "onboard", "help"}
+	"doctor", "plan", "verify", "digest", "map", "trash", "guard", "init", "usage", "overlay", "models", "onboard", "help"}
 
 func unknownCommand(word string) error {
 	best, bestDistance := "", 3

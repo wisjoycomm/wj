@@ -22,7 +22,7 @@ CHỦ ĐỀ HƯỚNG DẪN
   help tools     bộ công cụ dòng lệnh, quản lý cửa sổ
   help init      setup ban đầu cho một project (rule chung, rule theo job, skill Orca)
   help check     xem các agent có khớp cấu hình không
-  help doctor | plan | verify | digest | guard | trash    từng lệnh của project
+  help doctor | plan | verify | digest | map | guard | trash    từng lệnh của project
   help words    giải thích các từ hay gặp (gateway, token, profile...)
 
 CÀI MÁY VÀ KẾT NỐI
@@ -44,6 +44,7 @@ PROJECT: TIẾT KIỆM TOKEN
   wj init                        cài kit cho project đang đứng (-lite: phần không cần wj)
   wj doctor                      kiểm tra máy và project, báo vấn đề, sửa (-dry-run chỉ báo, -ai nhờ AI gợi ý)
   wj digest                      lỗi lặp lại, chỗ lãng phí token, ghi chú memory của project (cho /orca-dream)
+  wj map                         ghi .claude/map.md: mỗi thư mục một dòng, script, asset theo loại, file chính
   wj plan                        PLAN.md một bảng: task sẵn sàng, check format, worker cho model khác
   wj trash <file>...             chuyển file vào thùng rác thay vì xoá hẳn
 
@@ -331,7 +332,7 @@ func printHelp(args []string, input io.Reader, out io.Writer) error {
 		fmt.Fprintln(out, trashHelp)
 	case "guard":
 		fmt.Fprintln(out, guardHelp)
-	case "digest", "dream":
+	case "digest", "dream", "map":
 		fmt.Fprintln(out, digestHelp)
 	case "words", "terms", "tu":
 		fmt.Fprintln(out, helpWords)
