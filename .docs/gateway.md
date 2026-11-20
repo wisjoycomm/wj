@@ -120,8 +120,8 @@ Script không in key ra. Mỗi lần chạy tốn vài nghìn token của model 
 $env:WJ_PROFILE = "<tên>"; powershell -ExecutionPolicy Bypass -File docs\gateway\repro.ps1
 ```
 ```bash
-WJ_PROFILE=<tên> bash docs/gateway/repro.sh                 # bảng kết quả T1–T8
-WJ_PROFILE=<tên> bash docs/gateway/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
+WJ_PROFILE=<tên> bash .docs/gateway/repro.sh                 # bảng kết quả T1–T8
+WJ_PROFILE=<tên> bash .docs/gateway/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
 ```
 
 Đọc kết quả:

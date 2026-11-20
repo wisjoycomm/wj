@@ -271,7 +271,7 @@ Tool cài (cho Claude Code):
 wj không bắt buộc: thiếu wj thì skill và worker làm tay các bước wj plan, wj verify (tốn token
 hơn) và hook wj guard tự bỏ qua. /orca-dream cần bạn đưa output của wj digest.
 Cách dùng: /orca-orchestrator <mục tiêu> để chia task, rồi /orca-orchestrator go để chạy
-worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: docs/project.md.
+worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: .docs/project.md.
 
 An toàn khi chạy lại:
   - File đã có mà khác bản kit không bị ghi đè: Claude Code (claude -p) gộp bản kit vào, giữ mọi dòng

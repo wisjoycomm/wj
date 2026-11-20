@@ -9,7 +9,7 @@ One standalone CLI for setting up a development machine: the original
 Windows, macOS and Linux builds embed all toolkit scripts. No Go or Node.js is
 needed to run the downloaded executable.
 
-Vietnamese instructions: [HUONG-DAN.md](HUONG-DAN.md). Short guides for each part: [docs/](docs/README.md).
+Vietnamese instructions: [HUONG-DAN.md](HUONG-DAN.md). Short guides for each part: [.docs/](.docs/README.md).
 
 ## Start on a new Windows machine
 
@@ -132,7 +132,7 @@ with one line: `VERIFY: PASS`, `VERIFY: FAIL (...)` or `VERIFY: NOT_VERIFIED (..
 Agent is `claude`, or `claude:<model>` for a worker that runs on a named model.
 `wj plan` lists ready tasks by priority, `wj plan check` validates the format,
 `wj plan log` queries archived tasks and `wj plan convert` turns an old checkbox plan into the table and refreshes the
-project's Orca skills (the old files are backed up). See [docs/project.md](docs/project.md).
+project's Orca skills (the old files are backed up). See [.docs/project.md](.docs/project.md).
 
 ## Doctor
 
@@ -424,8 +424,8 @@ Cursor and Antigravity are machine-wide only.
 
 `wj usage` and `wj overlay` (Windows, same periods as `wj usage`) read the session files of Claude Code,
 Codex, OpenCode and Antigravity, so they need no proxy. The only network call is a daily refresh of model
-prices from OpenRouter into `~/.wj/prices.json` (off: `WJ_PRICES_UPDATE=off`). See [docs/token.md](docs/token.md).
-Gateway model refresh and probing: [docs/model.md](docs/model.md).
+prices from OpenRouter into `~/.wj/prices.json` (off: `WJ_PRICES_UPDATE=off`). See [.docs/token.md](.docs/token.md).
+Gateway model refresh and probing: [.docs/model.md](.docs/model.md).
 
 ## Token usage through mitmproxy
 
@@ -470,7 +470,7 @@ The addon also repairs Claude Code tool search for gateways that rename tools
 upstream (`Monitor` -> `Monitor_ide`) but not `tool_reference` blocks: after the
 first `400 Tool reference '...' not found` from a host it appends the suffix to
 those names, so tool search stays on instead of falling back to every tool schema
-on every call. Set `--set tool_ref_suffix=` (empty) to disable. See [docs/model.md](docs/model.md).
+on every call. Set `--set tool_ref_suffix=` (empty) to disable. See [.docs/model.md](.docs/model.md).
 `proxy run` sets `HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS` and `CODEX_CA_CERTIFICATE`
 for that child process only; client configuration and the user environment are
 not changed. To use your own mitmproxy instance, load

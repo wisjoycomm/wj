@@ -91,7 +91,7 @@ Khối `wj:begin base` trong `AGENTS.md` (nguồn: `kit/base/AGENTS.md`) có ngo
   người mới hiểu; không bịa (chưa kiểm thì nói chưa kiểm); điều lấy từ file, lệnh, doc, web thì ghi nguồn
   (`path:line`, lệnh đã chạy, URL).
 - **Reuse, don't repeat**: việc gì làm tới lần thứ hai, hoặc chắc sẽ lặp lại, kể cả việc chỉ một bước, thì agent
-  viết thành script trong `scripts/` (không hỏi gì khi chạy, output ít, có `-h`) và một skill ngắn
+  viết thành script trong `.tools/` (không hỏi gì khi chạy, output ít, có `-h`) và một skill ngắn
   `.claude/skills/<việc>/SKILL.md` nói khi nào dùng, lệnh nào, đọc output ra sao. Trước khi làm, nó tìm script và
   skill đã có để sửa, không viết bản thứ hai. Báo cáo cuối nêu script và skill đã thêm hay sửa. Script dùng được
   cho mọi agent đọc `AGENTS.md`; skill chỉ Claude Code đọc.

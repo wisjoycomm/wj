@@ -14,6 +14,7 @@ Hoặc xem từng phần:
 | [Giảm context](context.md) | Token tăng vọt: tìm nguyên nhân, giảm context mà không mất thông tin |
 | [Gateway](gateway.md) | Lỗi `tool_reference` của gateway đổi tên tool: cách nhận ra, bằng chứng, script kiểm tra mọi gateway |
 | [Project](project.md) | Setup rule và skill cho một project, so cấu hình giữa các agent |
+| [Phát hành](release.md) | Người bảo trì repo: phát hành bản wj mới bằng một lệnh |
 
 Trong terminal: `wj help`, hoặc `wj help claude`, `codex`, `models`, `usage`, `proxy`,
 `apps`, `tools`, `init`, `check`.
