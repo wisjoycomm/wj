@@ -26,6 +26,10 @@ is input for this skill, read as above, even without `/orca-orchestrator` in fro
 - A new goal, a bug or a change I ask for: plan it as tasks (step 1). Don't edit source files yourself, even
   for a small fix.
 - A question about the plan or the workers: answer from PLAN.md and the handover lines.
+- A question that needs reading code, running tests or reading a diff: don't do it here. Plan it as a task
+  (an investigation task whose answer goes in Notes), or tell me to ask it in another session.
+- Work outside the plan (a question unrelated to the tasks, a change to this skill, `.claude/` or AGENTS.md):
+  say in one line "do it in a new session, or say stop orchestrator first", and don't do it here.
 - `stop orchestrator` or `exit orchestrator`: from then on this session is a normal session again. Say so in
   one line.
 After a compaction of the conversation, read this file again before you go on.
@@ -161,7 +165,8 @@ Both modes:
 - PASS -> Status `DONE`; BLOCKED -> `BLOCKED`; PARTIAL -> `PARTIAL`.
   Put the SUMMARY (cut to 100 characters) in Notes and the branch in Session (`-` if the result names none).
 - A result with no handover line (the worker stopped early) is `BLOCKED` with Notes `no handover line`.
-- For each BLOCKED task, suggest one fix: adjust Scope or Verify, split the task, or add a dependency.
+- For each BLOCKED task, suggest one fix from the handover line and the row only (don't read code to
+  find it): adjust Scope or Verify, split the task, or add a dependency.
 - When every worker you started has reported, show me the changed rows and, for each DONE or PARTIAL task, the
   command to review it: `git --no-pager diff HEAD...<branch>`. Never merge on your own.
 
