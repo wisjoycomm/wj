@@ -6,9 +6,13 @@ import "time"
 // month up to the current one, which is coloured; and under each project a bar of
 // its share of the period's total.
 
+// overlayColumns is how many periods the overlay's chart shows: a glance at the
+// last week when it counts today. wj usage has the long view.
+const overlayColumns = 7
+
 // overlaySeries is the token per period of the overlay's kind (today: days, week:
-// weeks, month: months), ending with the current one. Empty periods before the first
-// with calls are dropped, keeping at least 4.
+// weeks, month: months), the last overlayColumns of them, ending with the current
+// one. Empty periods before the first with calls are dropped, keeping at least 4.
 func (s *sessionScanner) overlaySeries(window string, now time.Time) []int64 {
 	p, err := resolvePeriod(window, now)
 	if err != nil {
@@ -18,8 +22,8 @@ func (s *sessionScanner) overlaySeries(window string, now time.Time) []int64 {
 	if u == unitNone {
 		return nil
 	}
-	first, n := chartWindow(u, p.Start, now, 0)
-	return trimLeadingEmpty(s.unitSeries(u, first, n, "", ""), 4)
+	first := unitStep(u, unitStart(u, now), -(overlayColumns - 1))
+	return trimLeadingEmpty(s.unitSeries(u, first, overlayColumns, "", ""), 4)
 }
 
 func trimLeadingEmpty(series []int64, keep int) []int64 {

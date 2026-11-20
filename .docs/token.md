@@ -197,8 +197,9 @@ Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi 
 xem, giống `wj usage`: hôm nay (mặc định), tuần này (từ thứ Hai) hoặc tháng này, theo ngày dương lịch của máy chứ
 không phải 24 giờ gần nhất. Vì vậy số trên overlay khớp với `wj usage today`, `week`, `month`.
 
-Dưới dòng tổng là biểu đồ cột giống `wj usage`, thu nhỏ, không có nhãn: mỗi cột là một ngày (kỳ hôm nay, tối đa 14
-ngày), một tuần (kỳ tuần, tối đa 12 tuần) hoặc một tháng (kỳ tháng, tối đa 12 tháng). Cột cuối bên phải là kỳ hiện
+Dưới dòng tổng là biểu đồ cột giống `wj usage`, thu nhỏ, không có nhãn, 7 cột:
+7 ngày gần nhất (kỳ hôm nay), 7 tuần (kỳ tuần) hoặc 7 tháng (kỳ tháng). Xem dài hơn thì dùng `wj usage`.
+Dòng tổng chỉ ghi thêm tổng 7 ngày (`7d`); tổng 30 ngày và toàn bộ nằm ở dạng mở rộng. Cột cuối bên phải là kỳ hiện
 tại, màu xanh lá (vàng hay đỏ khi gần hoặc vượt `-warn`). Dưới tên mỗi project có một thanh xanh dương: phần của
 project đó trong tổng của kỳ.
 

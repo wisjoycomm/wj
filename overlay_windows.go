@@ -811,7 +811,7 @@ func overlayRender(hwnd uintptr) {
 		composeBar(colour, width, height, pad, barY, barWidth, int(l.barHeight), barFill(f.used, f.limit, barWidth), borderPixel, barPixels[f.warnLevel])
 	}
 	if l.chartHeight > 0 {
-		composeColumns(colour, width, height, pad, int(l.chartTop), width-pad*2, int(l.chartHeight), int(overlay.px(2)),
+		composeColumns(colour, width, height, pad, int(l.chartTop), width-pad*2, int(l.chartHeight), int(overlay.px(8)),
 			f.series, pastColumnPixel, barPixels[f.warnLevel], borderPixel)
 	}
 	if l.shareHeight > 0 {
