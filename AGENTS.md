@@ -29,6 +29,17 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - Tests run once, never in watch mode. Prefer quiet output.
 - Never run `git push`, `git reset --hard` or `git clean` unless the user asks.
 
+## Replies
+- Start with the answer or the result. No preamble, no apology, no closing pleasantries, no restating the question.
+- Short, plain words and short sentences. Explain so a newcomer can follow: say what it is and why, not only the term.
+- Never invent facts, paths, commands, flags, versions or numbers. If you did not check it, say "not checked" or "not sure". Say what is missing; don't guess.
+- A claim from a file, a command output, a doc or a web page gets its source: `path:line`, the command you ran, or the URL. A claim from memory is marked as such.
+
+## Reuse, don't repeat
+- When a multi-step job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), turn it into a script in `scripts/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does.
+- Then add a short skill `.claude/skills/<job>/SKILL.md`: when to use it, the exact command, and how to read its output. Before a job, check `scripts/` and the skills for one that already does it, and fix that script rather than writing a second one.
+- Say in your report which script and skill you added or changed.
+
 ## Stop after 3 failures
 If the same build or test check fails 3 times in a row, stop and report the exact error. Don't keep looping.
 <!-- wj:end base -->
@@ -44,10 +55,10 @@ If the same build or test check fails 3 times in a row, stop and report the exac
 
 <!-- wj:begin orca -->
 ## Orca: plan and parallel workers
-`wj` is optional here: without it the skills and the worker do the same steps by hand, which costs more tokens.
-- Delete with `wj trash <path>...`, never `rm`: it moves files to the recycle bin, so a wrong delete can be undone (no wj: ask me before deleting anything you did not create in this task).
-- Tasks live in `PLAN.md`, one table. Get its state with `wj plan`; don't read the whole file.
-- Never read or search `PLAN-ARCHIVE.md`. For an old task run `wj plan log -find T-12` (no wj: Grep the ID in it with `head_limit` 5).
+Never run `wj` yourself: it is a tool I run outside the agent. Do every step by hand.
+- Ask me before deleting anything you did not create in this task.
+- Tasks live in `PLAN.md`, one table. Grep it for `^\| T-` with `-n`; don't read the whole file.
+- Never read or search `PLAN-ARCHIVE.md`. For an old task Grep the ID in it with `head_limit` 5.
 - Parallel workers each run in their own git worktree and follow `.claude/agents/orca-worker.md`: Orca sessions started with the `orca` CLI, or `orca-worker` subagents when Orca is not running.
 - Claude Code skills: `/orca-orchestrator <goal>` plans tasks into PLAN.md, then `/orca-orchestrator go` runs them as workers. `/orca-dream` reviews past sessions and memory, and proposes changes.
 <!-- wj:end orca -->

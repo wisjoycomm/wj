@@ -28,5 +28,16 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - Tests run once, never in watch mode. Prefer quiet output.
 - Never run `git push`, `git reset --hard` or `git clean` unless the user asks.
 
+## Replies
+- Start with the answer or the result. No preamble, no apology, no closing pleasantries, no restating the question.
+- Short, plain words and short sentences. Explain so a newcomer can follow: say what it is and why, not only the term.
+- Never invent facts, paths, commands, flags, versions or numbers. If you did not check it, say "not checked" or "not sure". Say what is missing; don't guess.
+- A claim from a file, a command output, a doc or a web page gets its source: `path:line`, the command you ran, or the URL. A claim from memory is marked as such.
+
+## Reuse, don't repeat
+- When a multi-step job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), turn it into a script in `scripts/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does.
+- Then add a short skill `.claude/skills/<job>/SKILL.md`: when to use it, the exact command, and how to read its output. Before a job, check `scripts/` and the skills for one that already does it, and fix that script rather than writing a second one.
+- Say in your report which script and skill you added or changed.
+
 ## Stop after 3 failures
 If the same build or test check fails 3 times in a row, stop and report the exact error. Don't keep looping.

@@ -3,7 +3,7 @@ name: orca-orchestrator
 description: Act as the orchestrator for parallel workers - plan tasks into PLAN.md, run them as Orca workers (or orca-worker subagents) in git worktrees, record their handover lines, and merge on request. Use only when invoked as /orca-orchestrator.
 argument-hint: [goal | go | merge T-01 T-02]
 disable-model-invocation: true
-allowed-tools: Bash(wj plan *) Bash(orca status) Bash(orca orchestration worker-start *) Bash(orca orchestration check *) Bash(orca orchestration worker-list *) Agent(orca-worker)
+allowed-tools: Bash(orca status) Bash(orca orchestration worker-start *) Bash(orca orchestration check *) Bash(orca orchestration worker-list *) Agent(orca-worker)
 ---
 
 # Orca orchestrator
@@ -20,21 +20,17 @@ Input for this turn: $ARGUMENTS
 
 A worker's result arrives by itself when it finishes: do step 3 for it then. Never poll for it.
 
-## 0. Is `wj` there?
-`wj` is an optional helper: this skill works without it, a bit slower and with more tokens.
-Run `wj version` once per session and read the one-line file `.claude/wj-kit` (the wj version this kit was installed from; if the file is missing, there is no minimum).
-- `wj` not found: manual mode. Wherever a step shows a `wj` command, use its "Without wj" line instead. Tell me once: "wj not installed, manual mode".
-- `wj` older than the number in `.claude/wj-kit`: manual mode too, and tell me once to run `wj update`.
-- Otherwise use the `wj` commands.
+## 0. Modes
+Never run `wj`, even if it is installed: it is a tool I run myself, outside the agent. Do every step by hand as written here.
 
-Then run `orca status` once per session.
+Run `orca status` once per session.
 - It prints `runtimeReachable: true`: Orca mode. Workers are started with the `orca` CLI.
 - `orca` not found, or the runtime is not reachable: subagent mode. Tell me once: "Orca not running, workers run
   as subagents". Wherever a step has a "Subagent mode" part, use it.
 
 ## PLAN.md format (strict)
 PLAN.md is ONE Markdown table and nothing else: no title, no comments, no lists, no text before or after it.
-`wj` reads it line by line, so any other text breaks it.
+Tools read it line by line, so any other text breaks it.
 
 ```
 | ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |
@@ -60,27 +56,12 @@ No cell may contain `|` or a line break. Use `-` for an empty cell.
 Backlog work is a normal row with Status `TODO` and Pri `P3`.
 
 ## Reading PLAN.md
-Never read the whole PLAN.md or PLAN-ARCHIVE.md. Get the state with:
+Never read the whole PLAN.md or PLAN-ARCHIVE.md. Get the state by hand: Grep PLAN.md for `^\| T-` with `-n`.
+READY = Status `TODO` whose Depends are all `DONE` or archived, highest Pri first. Next ID = highest ID seen in
+PLAN.md, or in the last line of PLAN-ARCHIVE.md (Grep `^\| T-` with `head_limit` 1 and `-n`, then the tail via
+Read offset), plus one. Check that each row has 11 cells and fix any that don't before anything else.
 
-```
-wj plan
-```
-
-It prints the next ID, the active tasks with their line numbers, READY (highest priority first), WAITING and
-FORMAT problems. Fix every FORMAT line before anything else.
-
-Without wj: Grep PLAN.md for `^\| T-` with `-n`. READY = Status `TODO` whose Depends are all `DONE` or archived,
-highest Pri first. Next ID = highest ID seen in PLAN.md, or in the last line of PLAN-ARCHIVE.md (Grep `^\| T-`
-with `head_limit` 1 and `-n`, then the tail via Read offset), plus one. Check that each row has 11 cells.
-
-For finished tasks, query PLAN-ARCHIVE.md instead of reading it:
-
-```
-wj plan log               # last 20 archived tasks
-wj plan log -find T-12    # one ID, or text in Task or Notes
-```
-
-Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
+For finished tasks, Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5 instead of reading it.
 
 ## Editing PLAN.md
 - Change a task with one Edit whose old_string is that task's whole line (Read it with offset = its line number, limit 1).
@@ -108,7 +89,7 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
 - Find the right files with Grep/Glob before writing Scope. Don't read whole files.
 
 ## 2. Launch
-- Run `wj plan` (without wj: see "Reading PLAN.md"). Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
+- Read the plan (see "Reading PLAN.md"). Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
 - For each one, set Status `DOING`.
 - Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
   last commit, so a worker only sees what is committed.
@@ -135,7 +116,6 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
     | `codex`, `codex:<model>` | `--agent codex`, plus `--model <model>` if given |
     | `agy`, `agy:<model>` | `--agent antigravity`, plus `--model <model>` if given |
 
-    Ignore the WORKERS lines of `wj plan`: they are for subagent mode.
   - Each call prints a receipt with `dispatchId` and `workspace` (the worktree folder is the part after `::`).
     If a call fails, don't run it again: set the task back to `TODO` and show me the error.
 - Subagent mode: start all of them in one message, one Agent call per task:
@@ -147,13 +127,11 @@ Without wj: Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5.
     |---|---|---|
     | `claude` | `orca-worker` | (none) |
     | `claude:haiku`, `claude:sonnet`, `claude:opus`, `claude:fable` | `orca-worker` | the name after the colon |
-    | `claude:<any other id>` | the one `wj plan` shows for it under WORKERS | (none: the subagent carries its model) |
+    | `claude:<any other id>` | `orca-worker-` plus the id in lower case with every run of characters other than a-z and 0-9 turned into one `-` | (none: the subagent carries its model) |
     | `codex`, `agy`, with or without a model | don't start it | |
 
-  - A WORKERS line that says `MISSING`: don't start that task. Tell me the command on that line; a new
-    subagent only loads when Claude Code is reopened.
-    Without wj: the subagent is `orca-worker-` plus the id in lower case with every run of characters other
-    than a-z and 0-9 turned into one `-`; it exists if `.claude/agents/<that name>.md` does.
+  - If `.claude/agents/<that subagent name>.md` does not exist, don't start that task. Tell me it is missing
+    (I create it outside the agent, and a new subagent only loads when Claude Code is reopened).
   - A `codex` or `agy` task stays `TODO`. List these tasks for me with their IDs: I run them in that app.
 - Workers run in the background. Tell me which ones started (Orca mode: each has its own tab under this
   workspace in Orca), then end your turn: don't wait or poll.
@@ -201,21 +179,10 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
   git branch -d <branch>
   ```
 
-- Archive the merged rows. If I merged them myself, start here:
-
-  ```
-  wj plan archive T-01 T-02              # finds each task's newest commit naming its ID in git log
-  wj plan archive T-01 -commit 9fb158c   # one merge commit for all listed tasks
-  wj plan archive T-01=9fb158c T-02=3f38ef1
-  ```
-
-  It appends each row to PLAN-ARCHIVE.md (a table: the PLAN.md columns plus `Commit` and `Archived` date) and
-  deletes the row from PLAN.md. If I gave commit hashes, pass them; a `-` in Commit means none was found.
-  Never read PLAN-ARCHIVE.md.
-
-  Without wj: for each task, find its commit with `git log --format=%h -1 --grep "<ID>"`, append the row to the
-  end of PLAN-ARCHIVE.md (Bash `>>`) as the PLAN.md cells plus the commit (`-` if none) and today's date
-  (`YYYY-MM-DD`), then delete the row from PLAN.md.
+- Archive the merged rows. If I merged them myself, start here. For each task, find its commit with
+  `git log --format=%h -1 --grep "<ID>"` (or use the hash I gave), append the row to the end of PLAN-ARCHIVE.md
+  (Bash `>>`) as the PLAN.md cells plus the commit (`-` if none) and today's date (`YYYY-MM-DD`), then delete the
+  row from PLAN.md. Never read PLAN-ARCHIVE.md.
 - Commit PLAN.md and PLAN-ARCHIVE.md, then do step 2.
 
 ## Unity mode (shared checkout)
@@ -225,7 +192,7 @@ Applies when `.claude/agents/orca-worker.md` has no `isolation: worktree` line. 
 - Editor tasks (Scope has `*.unity`, `*.prefab`, `*.asset`, or the task runs tests / edits UI) run one at a time, and only when no script task is `DOING`.
 - Record: Session is the task's commit hash (`git log --format=%h -1 --grep "<ID>:"`); review with `git --no-pager show <hash>`.
 - An Editor task that reports a compile error in a file: add a `P0` task with that file as Scope, then rerun the blocked task after it is DONE.
-- No merge step: `merge` only archives (`wj plan archive T-01=<hash>`).
+- No merge step: `merge` only archives (with the task's commit hash, as above).
 
 ## Rules
 - Only you edit PLAN.md. Don't edit source files. Don't push.

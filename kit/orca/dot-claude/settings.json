@@ -21,11 +21,7 @@
       "Bash(orca status)",
       "Bash(orca orchestration worker-start *)",
       "Bash(orca orchestration check *)",
-      "Bash(orca orchestration worker-list *)",
-      "Bash(wj plan *)",
-      "Bash(wj verify *)",
-      "Bash(wj digest *)",
-      "Bash(wj trash *)"
+      "Bash(orca orchestration worker-list *)"
     ],
     "deny": [
       "Read(/PLAN-ARCHIVE.md)"

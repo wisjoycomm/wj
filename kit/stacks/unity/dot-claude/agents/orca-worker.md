@@ -35,27 +35,20 @@ Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or
   - After editing: save the scene/prefab through MCP, read the console again, and capture the Game view if the server has a screenshot tool.
 
 ## 5. Verify
-`wj` is optional. Run `wj version` once. If it works and `.claude/wj-kit` (one line, a version) is not newer than it, run:
+Never run `wj`. Verify by hand: `git status --short` (only Scope files are yours to judge), then run the Verify
+command from your row. If Verify is `-`: report BLOCKED `Verify needed`, do not guess. Exit 0 is PASS, non-zero is FAIL,
+a missing tool or dependency is NOT_VERIFIED:
 
-```
-wj verify <ID>
-```
-
-Without wj (not found, or older than `.claude/wj-kit`) do by hand: `git status --short` (only Scope files are yours to
-judge), then run the Verify command from your row. If Verify is `-`: report BLOCKED `Verify needed`, do not guess.
-
-With wj, act on the **last line**:
-
-| Last line | What to do |
+| Result | What to do |
 |---|---|
-| `VERIFY: PASS` | go to step 6 |
-| `VERIFY: FAIL (...)` | fix and rerun; on the 3rd FAIL stop and report BLOCKED with the key error |
-| `VERIFY: NOT_VERIFIED (...)` | not a pass, not a strike: do the setup step it names and rerun, else report BLOCKED with that reason |
+| PASS | go to step 6 |
+| FAIL | fix and rerun; on the 3rd FAIL stop and report BLOCKED with the key error |
+| NOT_VERIFIED | not a pass, not a strike: do the setup step it names and rerun, else report BLOCKED with that reason |
 
 If the command times out, rerun it once. A second timeout means BLOCKED `verify timeout`.
 
 ## 6. Commit only your files
-Only after `VERIFY: PASS` (or for a PARTIAL result whose finished part passed):
+Only after Verify is PASS (or for a PARTIAL result whose finished part passed):
 
 ```
 git add -- <files in Scope>

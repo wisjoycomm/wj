@@ -25,8 +25,8 @@ For every task no row above fits.
 ## Models of other vendors
 A worker can run on any model the gateway serves to Claude Code (GPT, Gemini, DeepSeek...). To use one:
 
-1. `wj models test`: take only an id that shows `OK` in the Claude Code column.
-2. `wj plan worker <id>`: creates that model's worker. Commit it and reopen Claude Code.
+1. I run `wj models test` outside the agent: take only an id that shows `OK` in the Claude Code column.
+2. I run `wj plan worker <id>` outside the agent: it creates that model's worker. Commit it and reopen Claude Code.
 3. Write `claude:<id>` in the Agent cell of the rows it should take, for example
    `| UI: layout, styling, components, visual polish, accessibility | claude:cx/gpt-6.1-sol |`.
 

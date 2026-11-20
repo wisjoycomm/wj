@@ -264,9 +264,9 @@ Tool cài (cho Claude Code):
   .claude/               skill /orca-orchestrator và /orca-dream, subagent orca-worker,
                          quyền chạy lệnh, file cấm đọc (lockfile, cache, .env),
                          hook wj guard chặn đọc cả file dài, và giới hạn output Bash
-  .claude/settings.local.json   memory của Claude Code nằm trong project (.claude/memory/),
+  .claude/settings.local.json   memory của Claude Code nằm trong project (.claude/memory/, vào git), tắt bớt skill (skillOverrides),
                          không còn ở ~/.claude. File này không vào git: mỗi worktree chạy wj init một lần
-  .gitignore             .tmp/, memory, worktree của worker, thư mục build của job
+  .gitignore             .tmp/, worktree của worker, thư mục build của job
 
 wj không bắt buộc: thiếu wj thì skill và worker làm tay các bước wj plan, wj verify (tốn token
 hơn) và hook wj guard tự bỏ qua. Riêng /orca-dream cần wj digest.

@@ -56,7 +56,7 @@ func TestInitFreshProjectInstallsKitAndChosenRules(t *testing.T) {
 		}
 	}
 	settings := readText(t, filepath.Join(root, ".claude", "settings.json"))
-	for _, want := range []string{"Bash(wj verify *)", "Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
+	for _, want := range []string{"Agent(orca-worker)", "Read(/PLAN-ARCHIVE.md)", "Read(/Library/**)",
 		"CLAUDE_CODE_GLOB_NO_IGNORE", `"baseRef": "head"`, "BASH_MAX_OUTPUT_LENGTH", "&& wj guard || true"} {
 		if !strings.Contains(settings, want) {
 			t.Errorf("settings.json lacks %q", want)
@@ -213,7 +213,7 @@ func TestInitLiteNeedsNoWj(t *testing.T) {
 	runInitIn(t, root, "-type", "web")
 	settings = readText(t, filepath.Join(root, ".claude", "settings.json"))
 	agents = readText(t, filepath.Join(root, "AGENTS.md"))
-	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "wj plan") {
+	if !strings.Contains(settings, "wj guard") || !strings.Contains(settings, "Agent(orca-worker)") || !strings.Contains(agents, "Never run `wj` yourself") {
 		t.Error("a full run after a lite one must add the Orca layer")
 	}
 	if _, err := os.Stat(filepath.Join(root, ".claude", "agents", "orca-worker.md")); err != nil {
@@ -322,10 +322,16 @@ func TestInitKeepsClaudeMemoryInsideTheProject(t *testing.T) {
 		t.Errorf("autoMemoryDirectory = %v, want %s", doc["autoMemoryDirectory"], want)
 	}
 	ignore := readText(t, filepath.Join(root, ".gitignore"))
-	for _, want := range []string{".claude/memory/", ".claude/settings.local.json", "CLAUDE.local.md"} {
+	for _, want := range []string{".claude/settings.local.json", "CLAUDE.local.md"} {
 		if !strings.Contains(ignore, want) {
-			t.Errorf("%s must be gitignored: memory is local", want)
+			t.Errorf("%s must be gitignored: it is local", want)
 		}
+	}
+	if strings.Contains(ignore, ".claude/memory/") {
+		t.Error("memory notes are shared through git, so they must not be gitignored")
+	}
+	if _, ok := doc["skillOverrides"]; !ok {
+		t.Error("settings.local.json lacks the kit's skillOverrides")
 	}
 
 	// A worktree points at the main checkout's folder, so the repo has one memory.

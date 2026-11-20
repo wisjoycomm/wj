@@ -3,7 +3,6 @@ name: orca-dream
 description: Review this project's recent Claude Code sessions for failures that keep repeating and its memory notes for what to share, keep or delete, and propose small evidence-backed changes to its rules, skills, permissions and memory for the user to approve. Use only when invoked as /orca-dream.
 argument-hint: [days to look back, default 7]
 disable-model-invocation: true
-allowed-tools: Bash(wj digest *) Bash(wj trash *)
 ---
 
 # Orca dream: learn from past sessions
@@ -18,17 +17,13 @@ Days to look back: $ARGUMENTS (use 7 if that is empty).
 
 ## 1. Get the digest
 
-This skill needs `wj`: transcripts are too big to read by hand. Run `wj version` and read `.claude/wj-kit`.
-If `wj` is not found, or is older than that number, reply in one line (`/orca-dream needs wj: install it, or
-run wj update`) and stop.
+This skill needs a digest of the recent sessions: transcripts are too big to read by hand. Never run `wj`
+yourself. I run `wj digest -days 7` outside the agent. If the digest is not in my message (pasted, or a file
+path, usually under `.tmp/`), reply in one line (`/orca-dream needs the output of wj digest: run it and paste it
+or give me the file`) and stop. For one session's errors, ask me to run `wj digest -session <id>`.
 
-```
-wj digest -days 7
-```
-
-It reads every session and subagent transcript of this repo, in all its worktrees, and prints the failures in
-compact form. Never open a transcript `.jsonl` file yourself: they are many megabytes.
-For every error of one session: `wj digest -session <id>`.
+The digest covers every session and subagent transcript of this repo, in all its worktrees, in compact form.
+Never open a transcript `.jsonl` file yourself: they are many megabytes.
 
 WASTE lists what filled the context for little: BIG RESULTS (one tool result of 8k+ tokens, with the call
 that produced it) and READ AGAIN (the same whole file read 3+ times in one session). A result stays in the
@@ -62,10 +57,11 @@ In this order. A fix the harness enforces beats a sentence a model has to rememb
    reads of a path that keeps getting opened by mistake. Never allow a command that deletes, pushes or publishes.
 2. **The check itself**: a task's Verify command in PLAN.md, a test script, or missing setup (for example a file
    that every new worktree lacks belongs in `.worktreeinclude`).
-3. **A procedure**: a step in `.claude/agents/orca-worker.md` or in a skill.
+3. **A procedure**: a step in `.claude/agents/orca-worker.md` or in a skill. When sessions keep doing the same
+   multi-step job by hand, propose a reusable script (as AGENTS.md "Reuse, don't repeat" says) plus a skill that says when and how to run it.
 4. **A lesson** (a convention or a pitfall of this project): one line under `## Lessons` in `AGENTS.md`. It is
    committed, so the team, every worker and every other coding agent get it, and git keeps its history.
-   Write it outside the `wj:begin` / `wj:end` blocks, which `wj init` rewrites; add the heading at the end of
+   Write it outside the `wj:begin` / `wj:end` blocks, which my tooling rewrites; add the heading at the end of
    the file if it is not there.
 5. **A fact of this machine only** (where a tool is installed, a local port): one line under `## Lessons` in
    `CLAUDE.local.md`, which is gitignored.
@@ -132,6 +128,6 @@ If nothing qualifies, say so in one line. That is a good result, not a failure.
 
 ## 6. Apply what I approve
 - Make exactly the approved changes, one Edit each. Don't touch the others.
-- Delete an approved note with `wj trash <file>` (it goes to the recycle bin, never `rm`), then remove its line from `MEMORY.md`.
+- Delete an approved note (the file named in the approved proposal, nothing else), then remove its line from `MEMORY.md`.
 - Don't commit: I review the diff first.
 - Reply with the files changed, one line each.

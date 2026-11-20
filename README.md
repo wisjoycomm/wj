@@ -89,7 +89,7 @@ table, the `/orca-orchestrator` and `/orca-dream` skills and the `orca-worker` s
 in `.claude/`, Claude permissions (allowed commands, and `Read` deny rules for
 lockfiles, caches and `.env`) and `.gitignore` entries. It also keeps Claude Code's
 auto memory inside the project (`.claude/memory/`, set through `autoMemoryDirectory`
-in the uncommitted `.claude/settings.local.json`) instead of under `~/.claude`. To add a job,
+in the uncommitted `.claude/settings.local.json`, which also switches off unused skills) instead of under `~/.claude`; the memory folder itself is committed so the team shares it. To add a job,
 add a folder under `kit/stacks/` and an entry in `initStacksList`. The kit keeps
 `.claude/` as `dot-claude/`, so Claude Code working on this repo doesn't
 load the kit's skills as its own.

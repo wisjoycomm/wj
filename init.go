@@ -489,6 +489,17 @@ func planLocalMemory(root string, _ []string) (initChange, error) {
 		return initChange{path: path, status: "đã đúng"}, nil
 	}
 	_, statErr := os.Stat(path)
+	// This machine's own defaults (skills to switch off) go in once, with the memory folder.
+	if data, err := kitFS.ReadFile(kitBase + "/settings.local.json"); err == nil {
+		var local map[string]any
+		if json.Unmarshal(data, &local) == nil {
+			for key, value := range local {
+				if _, exists := doc[key]; !exists {
+					doc[key] = value
+				}
+			}
+		}
+	}
 	doc["autoMemoryDirectory"] = filepath.Join(mainRepoRoot(root), ".claude", "memory")
 	var buf bytes.Buffer
 	encoder := json.NewEncoder(&buf)
@@ -646,10 +657,9 @@ func planGitignore(root string, stacks []string) (initChange, error) {
 		present[strings.TrimSpace(line)] = true
 	}
 	// .claude/worktrees/ is where Claude Code puts each worker subagent's worktree.
-	// Memory stays on this machine: Claude Code's own notes in .claude/memory/,
-	// lessons about this machine in CLAUDE.local.md. Lessons about the project
-	// are committed, in AGENTS.md.
-	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", ".claude/memory/", "CLAUDE.local.md"}
+	// Claude Code's own notes in .claude/memory/ are committed: the team shares them.
+	// Lessons about this machine stay in CLAUDE.local.md.
+	wanted := []string{".tmp/", ".claude/settings.local.json", ".claude/worktrees/", "CLAUDE.local.md"}
 	for _, id := range stacks {
 		extra, err := kitFS.ReadFile(kitStacks + "/" + id + "/gitignore")
 		if err != nil {

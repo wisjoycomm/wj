@@ -230,18 +230,18 @@ một Unity Editor (bản bạn đang mở) cho mọi việc cần Editor. Proje
 
 ## Memory và dreaming
 
-Memory có ba chỗ. Chỗ nháp ở local, bản đã duyệt vào git:
+Memory có ba chỗ. Cả nhóm dùng chung qua git; chỉ `CLAUDE.local.md` là riêng máy:
 
 | Ở đâu | Vào git? | Ai ghi | Ai đọc |
 |---|---|---|---|
-| `.claude/memory/` (ở checkout chính, mọi worktree dùng chung) | Không | Claude Code tự ghi trong phiên chính. Đây là **hộp nháp**: chưa ai duyệt | Phiên chính (file chỉ mục `MEMORY.md` được nạp ở mọi phiên) |
+| `.claude/memory/` (ở checkout chính, mọi worktree dùng chung) | Có | Claude Code tự ghi trong phiên chính. Đây là **hộp nháp**: chưa ai duyệt | Phiên chính (file chỉ mục `MEMORY.md` được nạp ở mọi phiên) |
 | `AGENTS.md` mục `## Lessons` | Có | `/orca-dream`, sau khi bạn duyệt | Mọi phiên, mọi worker, cả nhóm, và mọi CLI đọc `AGENTS.md` |
 | `CLAUDE.local.md` mục `## Lessons` | Không | `/orca-dream`, sau khi bạn duyệt | Mọi phiên và worker trên máy này. Chỉ cho thứ riêng của máy (chỗ cài tool, cổng local) |
 
 - Bài học đã duyệt nằm trong git để có lịch sử và rollback, và để người khác trong nhóm (kể cả người dùng bản
   lite) cùng có. Viết nó ngoài các khối `wj:begin` / `wj:end`, vì `wj init` ghi lại phần trong khối.
 - `wj init` ghi `autoMemoryDirectory` vào `.claude/settings.local.json` để Claude Code thôi lưu memory dưới
-  `~/.claude/projects/`. File này không vào git nên mỗi worktree bạn mở phiên chính cần chạy `wj init` một lần.
+  `~/.claude/projects/`, và thêm `skillOverrides` (tắt bớt skill không dùng). File này không vào git (đường dẫn tuyệt đối riêng từng máy) nên mỗi máy và mỗi worktree phiên chính cần chạy `wj init` một lần. Thư mục memory thì vào git.
 - Worker không tự ghi memory: nhiều worker ghi cùng một file sẽ đè nhau, và một worker hiểu sai sẽ làm hỏng cả
   đợt sau.
 - Đã thử (Claude Code 2.1.322, 2026-11-12): subagent chạy trong worktree riêng vẫn nhận được nội dung
