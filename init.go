@@ -99,7 +99,7 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 	types := flags.String("type", "", "loại job, vd unity hoặc web,go (bỏ trống thì tool hỏi)")
 	dry := flags.Bool("dry-run", false, "chỉ in ra sẽ làm gì, không ghi file")
 	update := flags.Bool("update", false, "lấy bản kit mới: file khác bản kit được Claude Code gộp vào (bản cũ sao lưu .bak), xoá file kit cũ")
-	noMerge := flags.Bool("no-merge", false, "không nhờ Claude Code gộp: file đã có và khác bản kit giữ nguyên")
+	noMerge := flags.Bool("no-merge", false, "không nhờ Claude Code: file đã có và khác bản kit giữ nguyên, scripts/ và docs/ cũ không chuyển")
 	lite := flags.Bool("lite", false, "chỉ cài phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook)")
 	remove := flags.Bool("remove", false, "gỡ kit khỏi project: chỉ phần của wj, file bạn đã sửa giữ nguyên (vào thùng rác)")
 	if err := flags.Parse(args); err != nil {
@@ -135,14 +135,19 @@ func runInit(args []string, input io.Reader, out io.Writer) error {
 			initMergePreview = true
 		} else {
 			initMerger = newInitMerger(out)
+			initFolderMover = newFolderMover(out)
 		}
-		defer func() { initMerger, initMergePreview = nil, false }()
+		defer func() { initMerger, initFolderMover, initMergePreview = nil, nil, false }()
 	}
+	oldKit, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(kitVersionFile)))
+	moved := moveOldKitFolders(root, strings.TrimSpace(string(oldKit)), *dry, out)
 	changes, err := planInit(root, stacks, *update, *lite)
 	if err != nil {
 		return err
 	}
-	oldKit, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(kitVersionFile)))
+	if !moved {
+		changes = withoutPath(changes, filepath.Join(root, filepath.FromSlash(kitVersionFile)))
+	}
 	if err := applyInit(root, stacks, changes, *dry, *lite, out); err != nil {
 		return err
 	}
@@ -225,6 +230,9 @@ func planInit(root string, stacks []string, update, lite bool) ([]initChange, er
 	// Removals keep their own order (a folder's files before the folder), after
 	// everything else.
 	var old []initChange
+	if change, ok := planStrayLocalSettings(root); ok {
+		old = append(old, change)
+	}
 	if update {
 		for _, rel := range orcaOldFiles {
 			path := filepath.Join(root, filepath.FromSlash(rel))
@@ -328,7 +336,8 @@ func planLayer(root, layer string, update bool, overrides map[string]string) ([]
 			return err
 		}
 		rel := kitTarget(strings.TrimPrefix(path, layer+"/"))
-		if rel == "AGENTS.md" || rel == "rules.md" || rel == ".claude/settings.json" {
+		// settings.local.json is read by planLocalMemory into .claude/, never copied.
+		if rel == "AGENTS.md" || rel == "rules.md" || rel == ".claude/settings.json" || rel == strayLocalSettings {
 			return nil
 		}
 		if source, ok := overrides[rel]; ok {

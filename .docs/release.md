@@ -3,7 +3,7 @@
 Dành cho người bảo trì repo. Một lệnh làm hết từ kiểm tra tới bản phát hành trên GitHub:
 
 ```sh
-sh .tools/release.sh 0.2.12      # -p: cập nhật giá model (prices.json) trước; -h: xem các bước
+sh .tools/release-new-wj-version/release-new-version.sh 0.2.12      # -p: cập nhật giá model (prices.json) trước; -h: xem các bước
 ```
 
 Trong Claude Code: `/release 0.2.12` (skill `.claude/skills/release/`).

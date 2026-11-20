@@ -76,7 +76,7 @@ func refreshPrices(home string, status io.Writer, download bool) {
 }
 
 // downloadPrices turns OpenRouter's model list into the prices.json format, with the
-// same filter as .tools/update-prices.sh.
+// same filter as .tools/release-new-wj-version/refresh-model-prices-from-openrouter.sh.
 func downloadPrices(url string, now time.Time) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

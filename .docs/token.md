@@ -255,7 +255,7 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 
 - Mỗi lượt gọi tính theo đúng model, loại token, cache 5 phút hay 1 giờ, và mức giá theo độ dài prompt.
 - Bảng giá lấy từ danh sách công khai của OpenRouter (https://openrouter.ai/api/v1/models). Một bản nhúng sẵn
-  trong `wj` (cập nhật mỗi bản phát hành bằng `.tools/update-prices.sh`). Màn hình `wj usage` và overlay tự tải bản
+  trong `wj` (cập nhật mỗi bản phát hành bằng `.tools/release-new-wj-version/refresh-model-prices-from-openrouter.sh`). Màn hình `wj usage` và overlay tự tải bản
   mới mỗi ngày một lần vào `~/.wj/prices.json`, nên model ra sau bản `wj` đang cài cũng có giá. `wj usage` chạy
   trong script, pipe hay `-json` không gọi mạng: chỉ dùng bản đã lưu. Mất mạng thì giữ bản cũ. Tắt hẳn:
   `WJ_PRICES_UPDATE=off`. Ngày của bảng giá in dưới bảng.
