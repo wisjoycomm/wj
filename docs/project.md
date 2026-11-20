@@ -62,7 +62,7 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
   `BASH_MAX_OUTPUT_LENGTH=15000` để output lệnh dài thành file + 2.000 ký tự đầu (xem [context.md](context.md)).
   Biến bạn đã đặt thì giữ nguyên giá trị.
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
-  trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
+  trên remote. Thiếu dòng này worker không thấy rule và `.claude/` vừa commit.
 
 `wj` là tool **bạn** chạy, ngoài agent. Rule, skill và worker không nhắc tới `wj` nên agent không dùng nó: chúng làm tay
 mọi bước (Grep `PLAN.md`, tự chạy lệnh Verify, tự ghi archive). Chỉ hook `wj guard` là harness gọi, và nó tự bỏ qua
@@ -138,6 +138,11 @@ Kiểu subagent khó theo dõi (không thấy worker nào đang chạy, đang l�
 Gọi `/orca-orchestrator` một lần là cả phiên đó thành orchestrator: các tin nhắn sau (`go`, `merge T-01`, một mục tiêu
 hay một lỗi mới) không cần gõ lại `/orca-orchestrator`. Việc sửa code bạn nhờ thì nó lập thành task cho worker, không
 tự sửa. Gõ `stop orchestrator` để phiên quay về bình thường.
+
+`PLAN.md` và `PLAN-ARCHIVE.md` không bao giờ có commit riêng: thay đổi của chúng đi chung với commit kế tiếp.
+Khi merge, orchestrator chạy `git merge --no-ff --no-commit`, chuyển dòng task sang archive, rồi commit cả code lẫn plan
+trong một commit `Merge <ID>: <Task>`. Lúc chạy worker nó chỉ commit khi `AGENTS.md`, `CLAUDE.md` hay `.claude/` đổi
+(worker cần thấy chúng), và cho `PLAN.md` vào cùng commit đó.
 
 Mỗi worker nhận đúng một dòng của `PLAN.md`, làm theo `.claude/agents/orca-worker.md` trong worktree riêng, tự chạy lệnh Verify của task, commit lên nhánh của worktree đó, rồi trả về một dòng
 `TASK: ... | STATUS: PASS|PARTIAL|BLOCKED | ...`. Orchestrator ghi kết quả vào `PLAN.md` và in lệnh

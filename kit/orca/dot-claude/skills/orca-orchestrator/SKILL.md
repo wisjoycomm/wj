@@ -23,7 +23,6 @@ A worker's result arrives by itself when it finishes: do step 3 for it then. Nev
 ## You stay the orchestrator
 Once this skill runs, this whole session is the orchestrator, not only this turn. Every later message of mine
 is input for this skill, read as above, even without `/orca-orchestrator` in front of it:
-- `go`, `merge ...`, or that I merged: the matching step.
 - A new goal, a bug or a change I ask for: plan it as tasks (step 1). Don't edit source files yourself, even
   for a small fix.
 - A question about the plan or the workers: answer from PLAN.md and the handover lines.
@@ -100,8 +99,9 @@ For finished tasks, Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5 instead 
 ## 2. Launch
 - Read the plan (see "Reading PLAN.md"). Launch the READY tasks, highest priority first, at most 4 at a time unless I ask for more.
 - For each one, set Status `DOING`.
-- Commit PLAN.md (plus AGENTS.md, CLAUDE.md and .claude/ if they changed). A worker's worktree starts from the
-  last commit, so a worker only sees what is committed.
+- Never commit PLAN.md on its own: its changes go into the next commit you make (see "PLAN.md rides along").
+  Commit now only if AGENTS.md, CLAUDE.md or .claude/ changed, because a worker's worktree starts from the last
+  commit and only sees what is committed; put PLAN.md in that same commit.
 - Orca mode: start all of them in one message, one Bash call per task. The row has backticks, so pass it on
   stdin exactly like this, never inside quotes:
 
@@ -113,7 +113,7 @@ For finished tasks, Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5 instead 
   ```
 
   - `--name`: the ID in lower case. `--base-branch`: the branch this checkout is on (`git branch --show-current`),
-    so the worker starts from the commit you just made.
+    so the worker starts from its last commit.
   - A task launched again whose folder from the earlier try is still in `git worktree list`: replace `--worktree
     new-child --name ... --base-branch ...` with `--worktree path:<that folder>`, so the worker keeps its changes.
   - `--agent` and `--model`, from the task's Agent:
@@ -167,10 +167,14 @@ Both modes:
 
 ## 4. Merge and archive
 Only when I say so. `merge` alone means every `DONE` task; otherwise only the tasks I name.
-- For each task, merge its branch into the current branch:
+- For each task, merge its branch without committing yet, archive its row (below), and commit both together, so
+  the code and the plan change land in one commit:
 
   ```
-  git merge --no-ff <branch> -m "Merge <ID>: <Task>"
+  git merge --no-ff --no-commit <branch>
+  (archive the row)
+  git add PLAN.md PLAN-ARCHIVE.md
+  git commit -m "Merge <ID>: <Task>"
   ```
 
   On a conflict run `git merge --abort`, set that task `BLOCKED` with Notes `merge conflict: <file>`, and go on
@@ -188,11 +192,18 @@ Only when I say so. `merge` alone means every `DONE` task; otherwise only the ta
   git branch -d <branch>
   ```
 
-- Archive the merged rows. If I merged them myself, start here. For each task, find its commit with
-  `git log --format=%h -1 --grep "<ID>"` (or use the hash I gave), append the row to the end of PLAN-ARCHIVE.md
+- Archiving a row: find the task's commit with `git log --format=%h -1 --grep "<ID>" <branch>` (or use the hash I
+  gave), append the row to the end of PLAN-ARCHIVE.md
   (Bash `>>`) as the PLAN.md cells plus the commit (`-` if none) and today's date (`YYYY-MM-DD`), then delete the
   row from PLAN.md. Never read PLAN-ARCHIVE.md.
-- Commit PLAN.md and PLAN-ARCHIVE.md, then do step 2.
+- If I merged them myself: archive the rows only; they ride along with the next commit.
+- Then do step 2.
+
+## PLAN.md rides along
+PLAN.md and PLAN-ARCHIVE.md never get a commit of their own. Whatever you changed in them goes into the next
+commit you make anyway: a merge commit (step 4), or a launch commit when AGENTS.md, CLAUDE.md or .claude/ changed
+(step 2). Until then they stay uncommitted; that is fine, workers get their row in the prompt. When a round ends
+with them still uncommitted, say so in one line.
 
 ## Unity mode (shared checkout)
 Applies when `.claude/agents/orca-worker.md` has no `isolation: worktree` line. Workers share this checkout, so there are no branches or worktrees.
@@ -201,7 +212,8 @@ Applies when `.claude/agents/orca-worker.md` has no `isolation: worktree` line. 
 - Editor tasks (Scope has `*.unity`, `*.prefab`, `*.asset`, or the task runs tests / edits UI) run one at a time, and only when no script task is `DOING`.
 - Record: Session is the task's commit hash (`git log --format=%h -1 --grep "<ID>:"`); review with `git --no-pager show <hash>`.
 - An Editor task that reports a compile error in a file: add a `P0` task with that file as Scope, then rerun the blocked task after it is DONE.
-- No merge step: `merge` only archives (with the task's commit hash, as above).
+- No merge step: `merge` only archives (with the task's commit hash, as above); the plan change rides along with
+  the next commit.
 
 ## Rules
 - Only you edit PLAN.md. Don't edit source files. Don't push.
