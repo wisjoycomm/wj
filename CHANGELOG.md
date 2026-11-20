@@ -3,6 +3,16 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.13
+- Overlay: a small column chart under the total, like `wj usage` (days, weeks or months, the current one in
+  colour), and a bar under each project for its share of the total.
+- `wj init` on a project from an older kit that still has `scripts/` or `docs/`: Claude Code moves them to
+  `.tools/` and `.docs/` and fixes every path that points at them. Files a build, CI or docs site uses stay put.
+  It prints what moved where; you review and commit.
+- Rules: `.tools/` has one folder per broad area of work, with long plain names for folders and scripts.
+- Fix: wj 0.2.11 also copied `settings.local.json` to the project root, where nothing reads it. `wj init` removes
+  that copy while it is unchanged.
+
 ## 0.2.12
 - Rules: scripts to reuse go in `.tools/` and docs in `.docs/` (was `scripts/` and `docs/`), so they sort first.
   Move an existing `scripts/` or `docs/` folder yourself if you want it to match.

@@ -2,7 +2,7 @@
 # Gateway: dat $env:GATEWAY_URL + $env:GATEWAY_KEY (+ $env:GATEWAY_MODEL), hoac $env:WJ_PROFILE=<ten>
 # de lay tu ~/.wj/profiles/<ten>.json.
 # Goi THANG gateway, khong qua proxy (proxy wj se sua request va che mat loi).
-# Chay: powershell -ExecutionPolicy Bypass -File repro.ps1
+# Chay: powershell -ExecutionPolicy Bypass -File run-tool-name-tests.ps1
 Remove-Item Env:HTTPS_PROXY, Env:HTTP_PROXY -ErrorAction SilentlyContinue
 $Url = $env:GATEWAY_URL; $K = $env:GATEWAY_KEY; $Model = $env:GATEWAY_MODEL
 if ($env:WJ_PROFILE) {

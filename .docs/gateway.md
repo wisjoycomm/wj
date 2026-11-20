@@ -109,7 +109,7 @@ Chưa kiểm tra bằng một phiên Claude Code thật qua gateway: kiểm tra 
 
 ## Kiểm tra lại
 
-Script trong [gateway/](gateway/), dùng được cho mọi gateway. Chọn gateway bằng một trong hai cách:
+Script trong [.tools/check-gateway-tool-names/](../.tools/check-gateway-tool-names/), dùng được cho mọi gateway. Chọn gateway bằng một trong hai cách:
 
 - `WJ_PROFILE=<tên profile>`: lấy `base_url`, `credential` và model có chữ `haiku` từ `~/.wj/profiles/<tên>.json`.
 - `GATEWAY_URL`, `GATEWAY_KEY`, `GATEWAY_MODEL`: đặt tay (biến đặt tay thắng profile).
@@ -117,11 +117,11 @@ Script trong [gateway/](gateway/), dùng được cho mọi gateway. Chọn gate
 Script không in key ra. Mỗi lần chạy tốn vài nghìn token của model đó. Script bash cần `jq`.
 
 ```powershell
-$env:WJ_PROFILE = "<tên>"; powershell -ExecutionPolicy Bypass -File docs\gateway\repro.ps1
+$env:WJ_PROFILE = "<tên>"; powershell -ExecutionPolicy Bypass -File .tools\check-gateway-tool-names\run-tool-name-tests.ps1
 ```
 ```bash
-WJ_PROFILE=<tên> bash .docs/gateway/repro.sh                 # bảng kết quả T1–T8
-WJ_PROFILE=<tên> bash .docs/gateway/capture-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
+WJ_PROFILE=<tên> bash .tools/check-gateway-tool-names/run-tool-name-tests.sh # bảng kết quả T1–T8
+WJ_PROFILE=<tên> bash .tools/check-gateway-tool-names/capture-full-http-logs.sh .tmp/gw  # log HTTP đầy đủ từng test (đã che key)
 ```
 
 Đọc kết quả:

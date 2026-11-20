@@ -249,7 +249,7 @@ const helpInit = `SETUP BAN ĐẦU CHO MỘT PROJECT
   wj init -type unity         chọn sẵn; nhiều loại thì: -type unity,web
   wj init -dry-run            xem trước, không ghi gì
   wj init -update             project cài bằng kit cũ: bỏ script .ps1 và skill worker cũ
-  wj init -no-merge           không nhờ Claude Code gộp file đã có (giữ nguyên)
+  wj init -no-merge           không nhờ Claude Code gộp file đã có, không chuyển scripts/ docs/ cũ
   wj init -lite               chỉ phần không cần wj: rule, quyền, file cấm đọc (không skill Orca, không hook).
                               Người không cài wj lấy đúng phần này từ wj-kit-lite-<job>.zip trong release
   wj init -remove             gỡ kit: khối wj trong AGENTS.md, file giống bản kit, hook wj guard, quyền Orca.
@@ -276,6 +276,8 @@ worker (subagent của Claude Code, mỗi worker một worktree). Chi tiết: .d
 An toàn khi chạy lại:
   - File đã có mà khác bản kit không bị ghi đè: Claude Code (claude -p) gộp bản kit vào, giữ mọi dòng
     của bạn, bản cũ sao lưu .bak-<giờ>. Không có claude, hoặc -no-merge: giữ nguyên.
+  - Project từ kit trước 0.2.13 còn scripts/ hoặc docs/: Claude Code chuyển sang .tools/ và .docs/, sửa
+    chỗ trỏ tới, không commit; file build/CI dùng thì để nguyên.
   - AGENTS.md: chỉ cập nhật phần nằm giữa dấu wj:begin / wj:end, phần bạn tự viết giữ nguyên.
   - settings.json và .gitignore: chỉ thêm, không xóa; lệnh bạn đã chặn vẫn bị chặn.
 

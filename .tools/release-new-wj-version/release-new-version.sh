@@ -2,11 +2,11 @@
 # Releases wj: checks, version bump, PR merged into main, tag v<version>, waits for the Release workflow.
 usage() {
   cat <<'EOF'
-Usage: .tools/release.sh [-h] [-p] VERSION      e.g. .tools/release.sh 0.2.12
+Usage: .tools/release-new-wj-version/release-new-version.sh [-h] [-p] VERSION      e.g. .tools/release-new-wj-version/release-new-version.sh 0.2.12
 
 Releases wj VERSION from the current branch (on main it first makes branch release-VERSION):
   1. needs a clean tree, gh signed in, a "## VERSION" entry in CHANGELOG.md, tag vVERSION not taken
-  2. -p: refreshes prices.json (.tools/update-prices.sh) and commits it if it changed
+  2. -p: refreshes prices.json (.tools/release-new-wj-version/refresh-model-prices-from-openrouter.sh) and commits it if it changed
   3. gofmt -l, go vet, go test (log in .tmp/release/)
   4. writes VERSION and .claude/wj-kit, commits "chore: release VERSION"
   5. pushes the branch, opens a PR into main with the CHANGELOG entry, merges it
@@ -27,7 +27,7 @@ done
 shift $((OPTIND - 1))
 [ $# -eq 1 ] || { usage >&2; exit 2; }
 ver=$1
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 log=.tmp/release
 mkdir -p "$log"
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -50,7 +50,7 @@ fi
 
 if [ $prices -eq 1 ]; then
   step "prices"
-  sh .tools/update-prices.sh
+  sh .tools/release-new-wj-version/refresh-model-prices-from-openrouter.sh
   if [ -n "$(git status --porcelain prices.json)" ]; then
     git commit -q -m "chore: refresh model prices" prices.json
   fi

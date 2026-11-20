@@ -197,6 +197,11 @@ Chấm xanh là project vừa dùng token trong 2 phút. Số token của mỗi 
 xem, giống `wj usage`: hôm nay (mặc định), tuần này (từ thứ Hai) hoặc tháng này, theo ngày dương lịch của máy chứ
 không phải 24 giờ gần nhất. Vì vậy số trên overlay khớp với `wj usage today`, `week`, `month`.
 
+Dưới dòng tổng là biểu đồ cột giống `wj usage`, thu nhỏ, không có nhãn: mỗi cột là một ngày (kỳ hôm nay, tối đa 14
+ngày), một tuần (kỳ tuần, tối đa 12 tuần) hoặc một tháng (kỳ tháng, tối đa 12 tháng). Cột cuối bên phải là kỳ hiện
+tại, màu xanh lá (vàng hay đỏ khi gần hoặc vượt `-warn`). Dưới tên mỗi project có một thanh xanh dương: phần của
+project đó trong tổng của kỳ.
+
 Nền overlay gần đục (mặc định 92%) để chữ đọc rõ trên mọi nền, có viền mỏng. Chữ luôn đặc hoàn toàn.
 Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề; các model thụt vào dưới project.
 Muốn thấy phần bên dưới thì chỉnh độ trong suốt (xem "Menu chuột phải").
@@ -255,7 +260,7 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 
 - Mỗi lượt gọi tính theo đúng model, loại token, cache 5 phút hay 1 giờ, và mức giá theo độ dài prompt.
 - Bảng giá lấy từ danh sách công khai của OpenRouter (https://openrouter.ai/api/v1/models). Một bản nhúng sẵn
-  trong `wj` (cập nhật mỗi bản phát hành bằng `.tools/update-prices.sh`). Màn hình `wj usage` và overlay tự tải bản
+  trong `wj` (cập nhật mỗi bản phát hành bằng `.tools/release-new-wj-version/refresh-model-prices-from-openrouter.sh`). Màn hình `wj usage` và overlay tự tải bản
   mới mỗi ngày một lần vào `~/.wj/prices.json`, nên model ra sau bản `wj` đang cài cũng có giá. `wj usage` chạy
   trong script, pipe hay `-json` không gọi mạng: chỉ dùng bản đã lưu. Mất mạng thì giữ bản cũ. Tắt hẳn:
   `WJ_PRICES_UPDATE=off`. Ngày của bảng giá in dưới bảng.

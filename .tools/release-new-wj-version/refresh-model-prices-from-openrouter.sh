@@ -2,7 +2,7 @@
 # Refreshes prices.json from OpenRouter's public model list. Run it before a release,
 # check the diff, then build: the file is embedded, so wj itself never goes online for prices.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 tmp=prices.json.tmp
 curl -fsS -m 60 https://openrouter.ai/api/v1/models | jq --arg date "$(date -u +%F)" '
   def keep: with_entries(select(.key | IN("prompt", "completion", "input_cache_read",

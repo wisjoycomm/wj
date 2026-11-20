@@ -70,8 +70,10 @@ const (
 	detachedProcess = 0x00000008
 )
 
-var bgPixel = [3]byte{0x1D, 0x18, 0x16}     // blue, green, red
-var borderPixel = [3]byte{0x6A, 0x62, 0x5C} // blue, green, red
+var bgPixel = [3]byte{0x1D, 0x18, 0x16}         // blue, green, red
+var borderPixel = [3]byte{0x6A, 0x62, 0x5C}     // blue, green, red
+var pastColumnPixel = [3]byte{0x9C, 0x92, 0x8A} // the chart's earlier periods
+var sharePixel = [3]byte{0xD0, 0x9C, 0x5C}      // a project's share bar, blue
 
 // barPixels is the usage bar's fill by warn level: green, yellow from 80%, red when over.
 var barPixels = [3][3]byte{{0x80, 0xDE, 0x4A}, {0x3C, 0xC8, 0xFF}, {0x60, 0x60, 0xFF}}
@@ -177,6 +179,7 @@ type overlayLine struct {
 	Active          bool
 	Detail          []string // extra columns, between Project and Tokens, when expanded
 	Cost            string   // last column, only when expanded
+	Total           int64    // the project's token, for its share bar
 }
 
 // Columns from overlayFirstNumber on are right aligned when expanded.
@@ -201,6 +204,7 @@ type overlayFrame struct {
 	warnLevel                   int
 	used, limit                 int64 // the window's total and the -warn limit; limit 0 means no bar
 	alpha                       byte
+	series                      []int64 // token per day, week or month, the current one last
 }
 
 type overlayView struct {
@@ -212,6 +216,7 @@ type overlayView struct {
 	whole      string
 	lines      []overlayLine
 	detail     []overlayLine
+	series     []int64
 	expanded   bool
 	warn       int64 // the user's limit for the window's total; 0 means none
 	warnLevel  int
@@ -446,12 +451,13 @@ func overlayFeed(home string, hwnd uintptr) {
 			lines = append(lines, overlayLine{Project: "Không có project đang chạy"})
 		}
 		for _, row := range running {
-			lines = append(lines, overlayLine{Project: cutRunes(row.Project, 18), Tokens: compactTokens(row.Total), Active: now.Sub(row.Last) < activeWindow})
+			lines = append(lines, overlayLine{Project: cutRunes(row.Project, 18), Tokens: compactTokens(row.Total), Active: now.Sub(row.Last) < activeWindow, Total: row.Total})
 		}
 		var detail []overlayLine
 		for _, entry := range detailEntries(overlayDetailRows(running, list), scanner.modelsByProject(since), overlayMaxLines) {
 			detail = append(detail, overlayDetailLine(entry, now))
 		}
+		series := scanner.overlaySeries(window, now)
 		whole := scanner.machineTotals(now)
 		whole += fmt.Sprintf(" · %s ≈%s theo giá API %s", overlayPeriodTag(window), costText(total), pricesAsOf)
 		shown := compactTokens(total.Total)
@@ -463,6 +469,7 @@ func overlayFeed(home string, hwnd uintptr) {
 		overlay.lines, overlay.detail, overlay.total, overlay.footer, overlay.whole = lines, detail, shown, footer, whole
 		overlay.warnLevel = warnLevel(total.Total, overlay.warn)
 		overlay.used = total.Total
+		overlay.series = series
 		overlay.mu.Unlock()
 		postMessage.Call(hwnd, wmSnapshot, 0, 0)
 		select {
@@ -636,6 +643,8 @@ type overlayLayout struct {
 	pad, gap, rowHeight, dot int32
 	headerHeight, headerBase int32 // header block (with its rule and bar) and its text height
 	barHeight                int32 // 0 without -warn
+	chartTop, chartHeight    int32 // the column chart under the header; height 0 without data
+	shareHeight              int32 // the share bar under each project row; 0 when expanded
 	columns                  []int32
 	width, height            int32
 }
@@ -664,6 +673,15 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	if f.limit > 0 {
 		l.barHeight = overlay.px(4)
 		l.headerHeight += l.barHeight + overlay.px(4)
+	}
+	if len(f.series) > 0 {
+		l.chartTop = l.pad + l.headerHeight
+		l.chartHeight = overlay.px(22)
+		l.headerHeight += l.chartHeight + overlay.px(4)
+	}
+	if !f.expanded {
+		l.shareHeight = overlay.px(2)
+		l.rowHeight += l.shareHeight + overlay.px(1)
 	}
 	selectObject.Call(hdc, overlay.font)
 	rows := int32(len(f.lines))
@@ -707,7 +725,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 func overlaySnapshot() overlayFrame {
 	overlay.mu.Lock()
 	defer overlay.mu.Unlock()
-	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn, overlay.alpha}
+	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn, overlay.alpha, overlay.series}
 	if f.expanded {
 		f.lines = overlay.detail
 	}
@@ -758,6 +776,19 @@ func overlayRender(hwnd uintptr) {
 		barY := int(l.pad + l.headerBase + overlay.px(3) + overlay.px(4))
 		barWidth := width - pad*2
 		composeBar(colour, width, height, pad, barY, barWidth, int(l.barHeight), barFill(f.used, f.limit, barWidth), borderPixel, barPixels[f.warnLevel])
+	}
+	if l.chartHeight > 0 {
+		composeColumns(colour, width, height, pad, int(l.chartTop), width-pad*2, int(l.chartHeight), int(overlay.px(2)),
+			f.series, pastColumnPixel, barPixels[f.warnLevel], borderPixel)
+	}
+	if l.shareHeight > 0 {
+		// each project's share of the period's total, under its row
+		for i, line := range f.lines {
+			rowBottom := int(l.pad + l.headerHeight + int32(i+1)*l.rowHeight)
+			x := pad + int(l.dot)
+			barWidth := width - pad - x
+			fillRect(colour, width, height, x, rowBottom-int(l.shareHeight), x+barFill(line.Total, f.used, barWidth), rowBottom, sharePixel)
+		}
 	}
 	if f.expanded {
 		// a rule under the column names

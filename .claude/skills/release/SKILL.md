@@ -10,7 +10,7 @@ disable-model-invocation: true
 1. Pick the version: the next patch after `VERSION` unless the user names one.
 2. Make sure `CHANGELOG.md` has a `## <version>` entry at the top, a few lines on what changed for users. Write
    it from `git log --oneline v<last>..HEAD` if missing, and commit it on the current branch.
-3. Run `sh .tools/release.sh <version>`. Add `-p` to refresh `prices.json` first. `-h` lists every step.
+3. Run `sh .tools/release-new-wj-version/release-new-version.sh <version>`. Add `-p` to refresh `prices.json` first. `-h` lists every step.
 
 Output: one `== <step>` line per step, then the release URL and asset count (the last release had 23). Exit 0 means
 the release is published. A `FAIL: ...` line names the step and the log in `.tmp/release/` to search; fix the cause

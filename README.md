@@ -110,6 +110,8 @@ already set is left as it is. A file that differs from the kit's is never overwr
 wj asks Claude Code (`claude -p`) to merge the kit's version into it, keeping every line
 you wrote, and backs the old file up (`-no-merge` skips this). `-update` also removes
 what older kits installed: the `.ps1` scripts and the `orca-stateless-worker` skill.
+A project from a kit before 0.2.13 that still has `scripts/` or `docs/`: Claude Code moves
+them to `.tools/` and `.docs/` and fixes the paths (files a build or CI uses stay put).
 
 You talk to one Claude Code session. `/orca-orchestrator <goal>` plans
 tasks into `PLAN.md`; `/orca-orchestrator go` starts each ready task as a worker in its

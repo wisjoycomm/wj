@@ -36,7 +36,7 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - A claim from a file, a command output, a doc or a web page gets its source: `path:line`, the command you ran, or the URL. A claim from memory is marked as such.
 
 ## Reuse, don't repeat
-- When a job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), even a one-step one, turn it into a script in `.tools/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does.
+- When a job comes up a second time, or will clearly come up again (a setup, a data check, a log query, a release step), even a one-step one, turn it into a script in `.tools/` instead of doing the steps by hand again. One script per job, non-interactive, quiet by default, with a `-h` that says what it does. Group scripts in one folder per broad area of work (`.tools/release-new-version/`, `.tools/check-game-balance-data/`), not one folder per script and not a flat pile; give folders and scripts long, plain names that say what they do.
 - Then add a short skill `.claude/skills/<job>/SKILL.md`: when to use it, the exact command, and how to read its output. Before a job, check `.tools/` and the skills for one that already does it, and fix that script rather than writing a second one. `.tools/` and `.docs/` start with a dot so they sort first; some searches skip dot folders, so list them by path.
 - Say in your report which script and skill you added or changed.
 

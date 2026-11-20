@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ghi log HTTP day du cho tung test (request body, header gui di, status, header + body tra ve).
 # Header Authorization duoc che. Can: bash, curl, jq.
-# Chay: bash capture-logs.sh <thu-muc-ra>
+# Chay: bash capture-full-http-logs.sh <thu-muc-ra>
 unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy ALL_PROXY all_proxy
 # Gateway: dat GATEWAY_URL + GATEWAY_KEY (+ GATEWAY_MODEL), hoac WJ_PROFILE=<ten> de lay tu ~/.wj/profiles/<ten>.json.
 P="$HOME/.wj/profiles/${WJ_PROFILE:-none}.json"

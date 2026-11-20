@@ -8,7 +8,7 @@ wj init                    tự nhận job, hoặc hỏi
 wj init -type unity,web    chọn job
 wj init -dry-run           xem trước
 wj init -update            project cài bằng kit cũ: xoá file kit cũ (file khác bản kit luôn được gộp, xem dưới)
-wj init -no-merge          không nhờ Claude Code gộp file đã có
+wj init -no-merge          không nhờ Claude Code gộp file đã có, không chuyển scripts/ docs/ cũ
 wj init -lite              chỉ phần không cần wj (xem "Hai mức" bên dưới)
 wj init -remove            gỡ kit: chỉ phần của wj (khối wj trong AGENTS.md, file giống bản kit,
                            hook wj guard, quyền Orca); file bạn đã sửa giữ nguyên, file gỡ vào
@@ -80,6 +80,12 @@ file này), nên chạy lại với cùng bản kit thì không hỏi agent nữ
 nguyên. `-dry-run` chỉ báo file nào sẽ được gộp. `PLAN.md`, `PLAN-ARCHIVE.md` và `.claude/models.md` là của bạn,
 không bao giờ gộp.
 
+**Project cài bằng kit trước 0.2.13 còn `scripts/` hoặc `docs/`:** `wj init` nhờ Claude Code (chạy trong project, chỉ
+được đọc, sửa file, `mkdir` và `git mv`, không commit, không xoá) chuyển script sang `.tools/<mảng việc>/`, docs sang
+`.docs/`, và sửa mọi chỗ trỏ tới đường dẫn cũ. File mà build, CI, package.json, Dockerfile hay trang docs dùng theo
+đường dẫn thì để nguyên. Tool in ra file nào chuyển đi đâu, file nào để lại và vì sao; bạn xem rồi commit. Chuyển
+hỏng thì `.claude/wj-kit` giữ số cũ, lần `wj init` sau thử lại.
+
 Xong thì commit các file này, vì worktree của worker chỉ thấy file đã commit, rồi mở lại Claude Code để nó nhận
 subagent và settings mới.
 
@@ -91,7 +97,8 @@ Khối `wj:begin base` trong `AGENTS.md` (nguồn: `kit/base/AGENTS.md`) có ngo
   người mới hiểu; không bịa (chưa kiểm thì nói chưa kiểm); điều lấy từ file, lệnh, doc, web thì ghi nguồn
   (`path:line`, lệnh đã chạy, URL).
 - **Reuse, don't repeat**: việc gì làm tới lần thứ hai, hoặc chắc sẽ lặp lại, kể cả việc chỉ một bước, thì agent
-  viết thành script trong `.tools/` (không hỏi gì khi chạy, output ít, có `-h`) và một skill ngắn
+  viết thành script trong `.tools/` (không hỏi gì khi chạy, output ít, có `-h`), mỗi mảng việc lớn một thư mục
+  (vd `.tools/release-new-version/`), tên thư mục và tên script dài, nói rõ làm gì; và một skill ngắn
   `.claude/skills/<việc>/SKILL.md` nói khi nào dùng, lệnh nào, đọc output ra sao. Trước khi làm, nó tìm script và
   skill đã có để sửa, không viết bản thứ hai. Báo cáo cuối nêu script và skill đã thêm hay sửa. Script dùng được
   cho mọi agent đọc `AGENTS.md`; skill chỉ Claude Code đọc.
