@@ -202,9 +202,15 @@ ngày), một tuần (kỳ tuần, tối đa 12 tuần) hoặc một tháng (k�
 tại, màu xanh lá (vàng hay đỏ khi gần hoặc vượt `-warn`). Dưới tên mỗi project có một thanh xanh dương: phần của
 project đó trong tổng của kỳ.
 
-Nền overlay gần đục (mặc định 92%) để chữ đọc rõ trên mọi nền, có viền mỏng. Chữ luôn đặc hoàn toàn.
-Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề; các model thụt vào dưới project.
-Muốn thấy phần bên dưới thì chỉnh độ trong suốt (xem "Menu chuột phải").
+Cạnh số token là số tiền quy đổi (`≈$`, theo giá API niêm yết, xem dưới): của cả kỳ ở dòng tổng, và của từng project
+ở cuối dòng project.
+
+Nền overlay nửa trong (mặc định 50%): thấy được cửa sổ phía sau. Chữ luôn đặc hoàn toàn, và nền ngay quanh chữ tự đậm
+hơn để chữ vẫn đọc rõ trên nền sáng. Có viền mỏng. Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề;
+các model thụt vào dưới project.
+
+Đổi độ đục nền: chuột phải → Độ trong suốt, hoặc `wj overlay -opacity 35` (20 đến 100; overlay đang mở đổi ngay,
+và số này được nhớ cho lần sau).
 
 Bấm đúp vào overlay (hoặc chuột phải, chọn Mở rộng) để xem báo cáo: app, lần dùng gần nhất,
 model, token vào, ra, cache và số tiền quy đổi của từng project, thêm cả project đã đóng trong
@@ -232,7 +238,8 @@ Chuột phải vào overlay mở menu:
 
 - **Mở rộng / Thu gọn (bấm đúp)**: như bấm đúp.
 - **Kỳ (như wj usage)**: hôm nay, tuần này, tháng này. Đổi kỳ đang xem, không cần mở lại.
-- **Độ trong suốt**: đặt độ đục của nền 40%, 60%, 80%, 92%, 100% (mặc định 92%; 100% là nền đặc, không thấy phần bên dưới).
+- **Độ trong suốt**: đặt độ đục của nền 20%, 35%, 50%, 65%, 80%, 100% (mặc định 50%; 100% là nền đặc, không thấy phần
+  bên dưới). Ai đang để 92%, mặc định cũ, được chuyển sang 50%.
 - **Cỡ chữ**: 85%, 100%, 125%, 150% (mặc định 100%).
 - **Đóng overlay**.
 

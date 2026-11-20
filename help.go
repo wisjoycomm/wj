@@ -192,6 +192,7 @@ một project.
                           độ trong suốt, cỡ chữ, đóng.
                           Cài đặt được nhớ trong overlay.json
   wj overlay -period week   mở với kỳ tuần này (today, week, month; mặc định today)
+  wj overlay -opacity 35    độ đục nền 20-100% (mặc định 50), đổi ngay nếu overlay đang mở, được nhớ
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt,
                           có thanh màu dưới dòng tổng
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)

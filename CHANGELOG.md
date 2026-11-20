@@ -3,6 +3,12 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.14
+- Overlay shows money next to tokens: `≈$` for the period's total and for each project (API list prices).
+- Overlay background is half see-through by default (50%, was 92%), with a darker halo right around the text so it
+  stays readable. `wj overlay -opacity 35` sets it (20-100), even on an open overlay, and remembers it. The menu
+  has 20, 35, 50, 65, 80, 100%.
+
 ## 0.2.13
 - Overlay: a small column chart under the total, like `wj usage` (days, weeks or months, the current one in
   colour), and a bar under each project for its share of the total.
