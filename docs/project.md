@@ -135,6 +135,10 @@ Kiểu subagent khó theo dõi (không thấy worker nào đang chạy, đang l�
 /orca-orchestrator merge T-01     gộp nhánh của task vào nhánh hiện tại, xoá worktree, archive
 ```
 
+Gọi `/orca-orchestrator` một lần là cả phiên đó thành orchestrator: các tin nhắn sau (`go`, `merge T-01`, một mục tiêu
+hay một lỗi mới) không cần gõ lại `/orca-orchestrator`. Việc sửa code bạn nhờ thì nó lập thành task cho worker, không
+tự sửa. Gõ `stop orchestrator` để phiên quay về bình thường.
+
 Mỗi worker nhận đúng một dòng của `PLAN.md`, làm theo `.claude/agents/orca-worker.md` trong worktree riêng, tự chạy lệnh Verify của task, commit lên nhánh của worktree đó, rồi trả về một dòng
 `TASK: ... | STATUS: PASS|PARTIAL|BLOCKED | ...`. Orchestrator ghi kết quả vào `PLAN.md` và in lệnh
 `git diff HEAD...<nhánh>` để bạn xem. Nó không tự merge: phải có lệnh `merge` của bạn.

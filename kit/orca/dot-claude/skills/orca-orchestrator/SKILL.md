@@ -20,6 +20,17 @@ Input for this turn: $ARGUMENTS
 
 A worker's result arrives by itself when it finishes: do step 3 for it then. Never poll for it.
 
+## You stay the orchestrator
+Once this skill runs, this whole session is the orchestrator, not only this turn. Every later message of mine
+is input for this skill, read as above, even without `/orca-orchestrator` in front of it:
+- `go`, `merge ...`, or that I merged: the matching step.
+- A new goal, a bug or a change I ask for: plan it as tasks (step 1). Don't edit source files yourself, even
+  for a small fix.
+- A question about the plan or the workers: answer from PLAN.md and the handover lines.
+- `stop orchestrator` or `exit orchestrator`: from then on this session is a normal session again. Say so in
+  one line.
+After a compaction of the conversation, read this file again before you go on.
+
 ## 0. Modes
 Run `orca status` once per session.
 - It prints `runtimeReachable: true`: Orca mode. Workers are started with the `orca` CLI.
