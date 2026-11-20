@@ -66,8 +66,7 @@ const planHelp = `PLAN.md dạng một bảng duy nhất (cho orchestrator / wor
   Status  TODO | DOING | DONE | BLOCKED | PARTIAL
   Agent   claude | codex | agy, hoặc kèm model: claude:haiku, codex:<model>, agy:<model>.
           claude:<model id của gateway> cần chạy wj plan worker <id> trước.
-          Orchestrator của Claude Code chỉ tự chạy dòng claude; dòng codex / agy nó liệt kê
-          để bạn chạy trong app đó.
+          Orchestrator tự chạy cả dòng claude, codex và agy như worker.
   Depends ID cách nhau dấu phẩy, hoặc -
   Scope   đường dẫn trong backtick, cách nhau dấu phẩy
   Verify  một lệnh trong backtick, hoặc - (tự đoán)

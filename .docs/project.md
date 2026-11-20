@@ -222,8 +222,8 @@ qua. Giao task nhỏ trước. Đã thử (Claude Code 2.1.322, 2026-11-12): sub
 
 **Agent khác (Codex, Antigravity).** Cột Agent cũng nhận `codex`, `agy`, hoặc kèm model: `codex:<model>`,
 `agy:<model>`, và dùng được trong `.claude/models.md` như mọi giá trị khác. Ở kiểu Orca orchestrator chạy chúng
-bằng `--agent codex` / `--agent antigravity`; ở kiểu subagent nó chỉ tự chạy dòng `claude`, còn task `codex` / `agy`
-nó để `TODO` và liệt kê ra để bạn chạy trong app đó. Dòng task, Scope và Verify
+bằng `--agent codex` / `--agent antigravity`; ở kiểu subagent nó chạy dòng `codex` bằng
+`codex exec` và dòng `agy` bằng `agy -p`, mỗi task trong worktree riêng (nhánh `orca/<id>`), coi như một worker. Dòng task, Scope và Verify
 giống nhau cho mọi agent.
 
 ### Unity: chung checkout
@@ -390,7 +390,7 @@ ghi chú, không danh sách). Nhờ vậy `wj` lấy một task chỉ cần đ�
 | Pri | `P0` gấp, `P1` cao, `P2` thường, `P3` để sau (thay cho Backlog) |
 | SP | Story point kiểu agile: `1` `2` `3` `5` `8` `13`, hoặc `?` chưa ước lượng. Từ 8 nên tách nhỏ |
 | Status | `TODO` `DOING` `DONE` (chưa merge) `BLOCKED` `PARTIAL` |
-| Agent | `claude` (model của phiên đang chạy), hoặc `claude:<model>` để worker chạy bằng model đó. `codex` `agy`: chạy được qua Orca, kit không cài gì riêng cho chúng |
+| Agent | `claude` (model của phiên đang chạy), hoặc `claude:<model>` để worker chạy bằng model đó. `codex` `agy`: orchestrator chạy chúng như worker (qua Orca, hoặc `codex exec` / `agy -p`), kit không cài gì riêng cho chúng |
 | Depends | ID cách nhau dấu phẩy, hoặc `-` |
 | Scope | Đường dẫn trong backtick, hoặc `-` |
 | Verify | Một lệnh trong backtick, hoặc `-` để tự đoán |

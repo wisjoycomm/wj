@@ -9,9 +9,9 @@ The first row that fits the task wins.
 
 | Kind of work | Agent |
 |---|---|
-| Security: auth, permissions, crypto, secrets, input validation | `claude:opus` |
-| Math and algorithms: numeric code, geometry, statistics, optimization, parsers | `claude:opus` |
-| UI: layout, styling, components, visual polish, accessibility | `claude:sonnet` |
+| Security: auth, permissions, crypto, secrets, input validation | `codex:cx/gpt-6.2-astra` |
+| Math and algorithms: numeric code, geometry, statistics, optimization, parsers | `codex:cx/gpt-6.2-astra` |
+| UI and images: layout, styling, components, visual polish, accessibility, images and graphics | `codex:cx/gpt-6.2-sol` |
 
 ## By size and risk
 For every task no row above fits.
@@ -37,9 +37,9 @@ where a short test passed. Give it small tasks first.
 ## Other coding agents
 The Agent cell can also name another coding agent: `codex`, `agy` (Antigravity), or one with a model, as in
 `codex:<model>` and `agy:<model>`. Use them in the tables above like any other value.
-The Claude Code orchestrator starts only the `claude` rows. It leaves a `codex` or `agy` task as `TODO` and
-lists it, so you run it in that app; the task's row, Scope and Verify are the same for every agent.
+The orchestrator runs `codex` and `agy` rows itself as workers, like `claude` rows: in an Orca tab (Orca mode),
+or with `codex exec` or `agy -p` in its own worktree (subagent mode). Antigravity models: run `agy models`. The task's row, Scope and Verify are the same for every agent.
 
 ## When a task comes back BLOCKED
 After a real attempt, relaunch it one step up: `claude:haiku` -> `claude:sonnet` -> `claude:opus`.
-A task that another vendor's model could not finish goes to `claude:opus`.
+A task that another vendor's model could not finish goes to `claude:opus`. That includes `codex` tasks.
