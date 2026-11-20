@@ -39,6 +39,7 @@ const (
 	monitorNearest  = 2
 	wmSnapshot      = 0x8001
 	wmSetOpacity    = 0x8002 // wParam: background opacity in percent
+	wmReloadLimits  = 0x8003 // read the limits from overlay.json again
 	wmSysCommand    = 0x0112
 	scDragMove      = 0xF012
 	csDblClks       = 0x0008
@@ -60,6 +61,7 @@ const (
 	menuText        = 30 // + index in overlayTextSizes
 	mfChecked       = 0x0008
 	mfPopup         = 0x0010
+	mfGrayed        = 0x0001
 	logPixelsY      = 90
 	defaultOpacity  = 50  // default background opacity in percent; text is always fully opaque
 	haloAlpha       = 190 // the background right around text is at least this opaque, so text stays readable
@@ -210,6 +212,7 @@ type overlayFrame struct {
 	used, limit                 int64 // the window's total and the -warn limit; limit 0 means no bar
 	alpha                       byte
 	series                      []int64 // token per day, week or month, the current one last
+	limits                      []overlayLimit
 }
 
 type overlayView struct {
@@ -222,6 +225,9 @@ type overlayView struct {
 	lines      []overlayLine
 	detail     []overlayLine
 	series     []int64
+	limits     []overlayLimit
+	limit5h    string // the user's 5-hour limit, as -limit-5h takes it
+	limitWeek  string // the user's 7-day limit
 	expanded   bool
 	warn       int64 // the user's limit for the window's total; 0 means none
 	warnLevel  int
@@ -243,6 +249,9 @@ type overlaySettings struct {
 	Since   string `json:",omitempty"`
 	Opacity int    `json:",omitempty"` // percent, 20-100
 	Text    int    `json:",omitempty"` // percent, 80-160
+	// Token limits for the limit row, as -limit-5h and -limit-week take them.
+	Limit5h   string `json:",omitempty"`
+	LimitWeek string `json:",omitempty"`
 }
 
 // The overlay counts the same periods as wj usage (calendar day, week from Monday,
@@ -288,6 +297,8 @@ func runOverlay(args []string, out io.Writer, home string) error {
 	foreground := flags.Bool("run", false, "chạy cửa sổ ngay trong tiến trình này")
 	warn := flags.String("warn", "", "đổi màu dòng tổng khi gần tới ngưỡng này, ví dụ 5M, 500k")
 	opacity := flags.Int("opacity", 0, "độ đục của nền, 20-100 (%), được lưu lại; mặc định 50")
+	limit5h := flags.String("limit-5h", "", "hạn mức token của một block 5 giờ, vd 20M, hoặc max (block lớn nhất từng dùng), off để tắt; được lưu lại")
+	limitWeek := flags.String("limit-week", "", "hạn mức token của 7 ngày gần nhất, vd 500M, off để tắt; được lưu lại")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -303,6 +314,19 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		return errors.New("-opacity nhận từ 20 đến 100 (phần trăm)")
 	}
 	overlayOpacityFlag = *opacity
+	limitsSet := false
+	flags.Visit(func(f *flag.Flag) { limitsSet = limitsSet || f.Name == "limit-5h" || f.Name == "limit-week" })
+	if err := checkOverlayLimit(*limit5h, true); err != nil {
+		return fmt.Errorf("-limit-5h: %w", err)
+	}
+	if err := checkOverlayLimit(*limitWeek, false); err != nil {
+		return fmt.Errorf("-limit-week: %w", err)
+	}
+	if limitsSet {
+		if err := overlaySaveLimits(filepath.Join(stateDir(home), "overlay.json"), flags, *limit5h, *limitWeek); err != nil {
+			return err
+		}
+	}
 	if *warn != "" {
 		limit, err := parseTokenCount(*warn)
 		if err != nil {
@@ -325,13 +349,18 @@ func runOverlay(args []string, out io.Writer, home string) error {
 		return errors.New("cách dùng: wj overlay [-period today|week|month] [-warn 5M] [-opacity 50] | wj overlay stop")
 	}
 	if existing != 0 {
+		// The open overlay takes new settings at once.
 		if *opacity != 0 {
-			// The open overlay takes the new opacity at once.
 			postMessage.Call(existing, wmSetOpacity, uintptr(*opacity), 0)
 			fmt.Fprintf(out, "Đã đặt độ đục nền overlay %d%%.\n", *opacity)
-			return nil
 		}
-		fmt.Fprintln(out, "Overlay đang mở rồi. Đóng: wj overlay stop")
+		if limitsSet {
+			postMessage.Call(existing, wmReloadLimits, 0, 0)
+			fmt.Fprintln(out, "Đã đặt hạn mức trên overlay.")
+		}
+		if *opacity == 0 && !limitsSet {
+			fmt.Fprintln(out, "Overlay đang mở rồi. Đóng: wj overlay stop")
+		}
 		return nil
 	}
 	if *foreground {
@@ -370,6 +399,7 @@ func overlayLoop(window string, sinceSet bool, home string) error {
 		if saved.Text >= 80 && saved.Text <= 160 {
 			overlay.textPct = saved.Text
 		}
+		overlay.limit5h, overlay.limitWeek = saved.Limit5h, saved.LimitWeek
 	}
 	overlay.window = window
 	overlay.refresh = make(chan struct{}, 1)
@@ -464,7 +494,7 @@ func overlayFeed(home string, hwnd uintptr) {
 	scanner := newSessionScanner(home)
 	for {
 		overlay.mu.Lock()
-		window := overlay.window
+		window, limit5h, limitWeek := overlay.window, overlay.limit5h, overlay.limitWeek
 		overlay.mu.Unlock()
 		since := overlayPeriodStart(window, time.Now())
 		scanner.scan(time.Time{})
@@ -484,6 +514,7 @@ func overlayFeed(home string, hwnd uintptr) {
 			detail = append(detail, overlayDetailLine(entry, now))
 		}
 		series := scanner.overlaySeries(window, now)
+		limits := scanner.overlayLimits(limit5h, limitWeek, now)
 		whole := scanner.machineTotals(now)
 		whole += fmt.Sprintf(" · %s ≈%s theo giá API %s", overlayPeriodTag(window), costText(total), pricesAsOf)
 		shown := compactTokens(total.Total)
@@ -496,6 +527,7 @@ func overlayFeed(home string, hwnd uintptr) {
 		overlay.warnLevel = warnLevel(total.Total, overlay.warn)
 		overlay.used = total.Total
 		overlay.series = series
+		overlay.limits = limits
 		overlay.mu.Unlock()
 		postMessage.Call(hwnd, wmSnapshot, 0, 0)
 		select {
@@ -549,6 +581,17 @@ func overlayProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 		return 0
 	case wmSnapshot:
 		overlayRender(hwnd)
+		return 0
+	case wmReloadLimits:
+		if saved, ok := overlayLoadSettings(); ok {
+			overlay.mu.Lock()
+			overlay.limit5h, overlay.limitWeek = saved.Limit5h, saved.LimitWeek
+			overlay.mu.Unlock()
+		}
+		select {
+		case overlay.refresh <- struct{}{}:
+		default:
+		}
 		return 0
 	case wmSetOpacity:
 		overlay.mu.Lock()
@@ -616,6 +659,9 @@ func overlayMenu(hwnd uintptr) {
 		func(i int) bool { return opacityAlpha(overlayOpacities[i]) == alpha })
 	submenu("Cỡ chữ", len(overlayTextSizes), func(i int) uintptr { return uintptr(menuText + i) },
 		func(i int) string { return fmt.Sprintf("%d%%", overlayTextSizes[i]) }, func(i int) bool { return overlayTextSizes[i] == pct })
+	// Limits take a number, which a menu cannot ask for: say the command instead.
+	hint, _ := windows.UTF16PtrFromString("Hạn mức: wj overlay -limit-5h 20M -limit-week 500M")
+	appendMenu.Call(menu, mfGrayed, 0, uintptr(unsafe.Pointer(hint)))
 	label, _ := windows.UTF16PtrFromString("Đóng overlay")
 	appendMenu.Call(menu, 0, menuClose, uintptr(unsafe.Pointer(label)))
 	setForegroundWindow.Call(hwnd)
@@ -678,11 +724,20 @@ type overlayLayout struct {
 	barHeight                int32 // 0 without -warn
 	chartTop, chartHeight    int32 // the column chart under the header; height 0 without data
 	shareHeight              int32 // the share bar under each project row; 0 when expanded
+	limitsTop, limitsText    int32 // the limit row: its top and its text height; text 0 without limits
 	columns                  []int32
 	width, height            int32
 }
 
 func (o *overlayView) px(v int) int32 { return int32(float64(v) * o.scale) }
+
+func limitBarHeight() int32 { return overlay.px(3) }
+
+// limitSegment is where limit i of n sits in the limit row: its left edge and width.
+func limitSegment(l overlayLayout, i, n int) (x, width int32) {
+	width = (l.width - l.pad*2 - l.gap*int32(n-1)) / int32(n)
+	return l.pad + int32(i)*(width+l.gap), width
+}
 
 func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	selectObject.Call(hdc, overlay.font)
@@ -712,6 +767,10 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 		l.chartHeight = overlay.px(22)
 		l.headerHeight += l.chartHeight + overlay.px(4)
 	}
+	if len(f.limits) > 0 {
+		l.limitsTop, l.limitsText = l.pad+l.headerHeight, textHeight
+		l.headerHeight += textHeight + overlay.px(2) + limitBarHeight() + overlay.px(5)
+	}
 	if !f.expanded {
 		l.shareHeight = overlay.px(2)
 		l.rowHeight += l.shareHeight + overlay.px(1)
@@ -740,6 +799,15 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 	selectObject.Call(hdc, overlay.font)
 	footerWidth, _ := textWidth(hdc, " · "+f.footer)
 	minimum := headerWidth + footerWidth
+	if n := int32(len(f.limits)); n > 0 {
+		// every segment as wide as the widest text, so the bars line up
+		var widest int32
+		for _, limit := range f.limits {
+			w, _ := textWidth(hdc, limit.text(time.Now()))
+			widest = max(widest, w)
+		}
+		minimum = max(minimum, widest*n+l.gap*(n-1))
+	}
 	if f.expanded {
 		selectObject.Call(hdc, overlay.bold)
 		wholeWidth, _ := textWidth(hdc, f.whole)
@@ -758,7 +826,7 @@ func overlayMeasure(hdc uintptr, f overlayFrame) overlayLayout {
 func overlaySnapshot() overlayFrame {
 	overlay.mu.Lock()
 	defer overlay.mu.Unlock()
-	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn, overlay.alpha, overlay.series}
+	f := overlayFrame{overlay.lines, overlay.title, overlay.total, overlay.footer, overlay.whole, overlay.expanded, overlay.warnLevel, overlay.used, overlay.warn, overlay.alpha, overlay.series, overlay.limits}
 	if f.expanded {
 		f.lines = overlay.detail
 	}
@@ -813,6 +881,12 @@ func overlayRender(hwnd uintptr) {
 	if l.chartHeight > 0 {
 		composeColumns(colour, width, height, pad, int(l.chartTop), width-pad*2, int(l.chartHeight), int(overlay.px(8)),
 			f.series, pastColumnPixel, barPixels[f.warnLevel], borderPixel)
+	}
+	for i, limit := range f.limits {
+		x, segment := limitSegment(l, i, len(f.limits))
+		y := int(l.limitsTop + l.limitsText + overlay.px(2))
+		composeBar(colour, width, height, int(x), y, int(segment), int(limitBarHeight()),
+			barFill(limit.Used, limit.Limit, int(segment)), borderPixel, barPixels[limit.level()])
 	}
 	if l.shareHeight > 0 {
 		// each project's share of the period's total, under its row
@@ -908,7 +982,8 @@ func overlaySavePosition(hwnd uintptr) {
 	var rect winRect
 	getWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 	overlay.mu.Lock()
-	saved := overlaySettings{X: rect.Left, Y: rect.Top, Since: overlay.window, Opacity: (int(overlay.alpha)*100 + 127) / 255, Text: overlay.textPct}
+	saved := overlaySettings{X: rect.Left, Y: rect.Top, Since: overlay.window, Opacity: (int(overlay.alpha)*100 + 127) / 255, Text: overlay.textPct,
+		Limit5h: overlay.limit5h, LimitWeek: overlay.limitWeek}
 	overlay.mu.Unlock()
 	data, err := json.Marshal(saved)
 	if err != nil {
@@ -917,6 +992,40 @@ func overlaySavePosition(hwnd uintptr) {
 	if os.MkdirAll(filepath.Dir(overlay.statePath), 0o755) == nil {
 		_ = os.WriteFile(overlay.statePath, data, 0o644)
 	}
+}
+
+// overlaySaveLimits writes the limits given on the command line into overlay.json,
+// keeping everything else in it. "off" clears a limit; a flag not given keeps it.
+func overlaySaveLimits(path string, flags *flag.FlagSet, limit5h, limitWeek string) error {
+	var saved overlaySettings
+	if data, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(data, &saved)
+	}
+	clean := func(text string) string {
+		if t := strings.ToLower(strings.TrimSpace(text)); t == "off" || t == "0" {
+			return ""
+		}
+		return strings.TrimSpace(text)
+	}
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "limit-5h":
+			saved.Limit5h = clean(limit5h)
+		case "limit-week":
+			saved.LimitWeek = clean(limitWeek)
+		}
+	})
+	data, err := json.Marshal(saved)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("lưu hạn mức: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("lưu hạn mức: %w", err)
+	}
+	return nil
 }
 
 // overlayDraw writes all the text on the selected bitmap; asMask draws every colour white.
@@ -939,6 +1048,11 @@ func overlayDraw(hdc uintptr, l overlayLayout, f overlayFrame, asMask bool) {
 	footer := " · " + f.footer
 	_, footerHeight := textWidth(hdc, footer)
 	drawText(hdc, l.pad+titleWidth+totalWidth, y+l.headerBase-footerHeight, footer, paint(mutedColor))
+	now := time.Now()
+	for i, limit := range f.limits {
+		x, _ := limitSegment(l, i, len(f.limits))
+		drawText(hdc, x, l.limitsTop, limit.text(now), paint([]uint32{mutedColor, warnColor, overColor}[limit.level()]))
+	}
 	y += l.headerHeight - l.rowHeight
 	firstNumber := 1
 	if f.expanded {

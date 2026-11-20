@@ -10,6 +10,9 @@ newer than the kit a project was set up with.
   has 20, 35, 50, 65, 80, 100%.
 - Compact overlay is shorter: the chart shows the last 7 days (or 7 weeks, 7 months), and the header only the 7-day
   total. The 30-day and all-time totals are in the expanded view.
+- Overlay limits: `wj overlay -limit-5h 20M -limit-week 500M` adds a row with the share used of the running 5-hour
+  block (and the time left) and of the last 7 days, yellow from 80%, red when over. `-limit-5h max` takes your
+  largest block as the limit.
 
 ## 0.2.13
 - Overlay: a small column chart under the total, like `wj usage` (days, weeks or months, the current one in

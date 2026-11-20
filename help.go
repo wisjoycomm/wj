@@ -193,6 +193,9 @@ một project.
                           Cài đặt được nhớ trong overlay.json
   wj overlay -period week   mở với kỳ tuần này (today, week, month; mặc định today)
   wj overlay -opacity 35    độ đục nền 20-100% (mặc định 50), đổi ngay nếu overlay đang mở, được nhớ
+  wj overlay -limit-5h 20M -limit-week 500M
+                          hạn mức token: % đã dùng của block 5 giờ và của 7 ngày, vàng từ 80%, đỏ khi vượt;
+                          -limit-5h max = block lớn nhất từng dùng; off để tắt; được nhớ
   wj overlay -warn 5M     dòng tổng hiện 16.5M/5M, chuyển vàng từ 80% ngưỡng, đỏ khi vượt,
                           có thanh màu dưới dòng tổng
   wj overlay stop         đóng overlay (overlay hiện chỉ có trên Windows)

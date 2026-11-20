@@ -206,6 +206,22 @@ project đó trong tổng của kỳ.
 Cạnh số token là số tiền quy đổi (`≈$`, theo giá API niêm yết, xem dưới): của cả kỳ ở dòng tổng, và của từng project
 ở cuối dòng project.
 
+**Hạn mức.** Đặt hạn mức token thì overlay có thêm một dòng dưới biểu đồ, mỗi hạn mức một thanh:
+
+```
+wj overlay -limit-5h 20M -limit-week 500M   # đặt (được nhớ; overlay đang mở đổi ngay)
+wj overlay -limit-5h max                    # 5h: lấy block 5 giờ lớn nhất bạn từng dùng (30 ngày qua) làm mốc
+wj overlay -limit-week off                  # tắt một hạn mức
+```
+
+- `5h 34% · còn 2h10`: phần đã dùng của block 5 giờ đang chạy, và còn bao lâu tới khi block hết. Block tính như
+  gói Claude: bắt đầu từ giờ tròn của lượt gọi đầu, dài 5 giờ (giống `wj usage -blocks`).
+- `7 ngày 61%`: phần đã dùng của 7 ngày gần nhất, cùng số với `7d` trên dòng tổng.
+- Chữ và thanh chuyển vàng từ 80%, đỏ khi vượt.
+
+`wj` không đọc được hạn mức thật của gói Claude hay gateway, nên đây là con số bạn tự đặt. Tính cả token cache, như
+mọi số khác của overlay.
+
 Nền overlay nửa trong (mặc định 50%): thấy được cửa sổ phía sau. Chữ luôn đặc hoàn toàn, và nền ngay quanh chữ tự đậm
 hơn để chữ vẫn đọc rõ trên nền sáng. Có viền mỏng. Dòng tổng có chữ đậm, và phần mở rộng có dòng kẻ dưới tiêu đề;
 các model thụt vào dưới project.
