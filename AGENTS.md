@@ -30,6 +30,10 @@ Rules for every coding agent in this repo. Claude Code has extra notes in CLAUDE
 - Tests run once, never in watch mode. Prefer quiet output.
 - Never run `git push`, `git reset --hard` or `git clean` unless the user asks.
 
+## Security
+- Don't read `.env` files, `~/.ssh`, `~/.aws` or other secret files. If a task needs a secret, write a script for the user to run instead.
+- Don't run remote commands (deploy, SSH, cloud CLIs). Leave them to the user or the coordinator.
+
 ## Replies
 - Start with the answer or the result. No preamble, no apology, no closing pleasantries, no restating the question.
 - Short, plain words and short sentences. Explain so a newcomer can follow: say what it is and why, not only the term.
