@@ -3,7 +3,7 @@ name: orca-orchestrator
 description: Act as the orchestrator for parallel workers - plan tasks into PLAN.md, run them as Orca workers (or orca-worker subagents) in git worktrees, record their handover lines, and merge on request. Use only when invoked as /orca-orchestrator.
 argument-hint: [goal | go | merge T-01 T-02]
 disable-model-invocation: true
-allowed-tools: Bash(orca status) Bash(orca orchestration worker-start *) Bash(orca orchestration check *) Bash(orca orchestration worker-list *) Agent(orca-worker)
+allowed-tools: Bash(orca status) Bash(orca orchestration worker-start *) Bash(orca orchestration check *) Bash(orca orchestration worker-list *) Bash(mkdir -p .tmp/orca *) Bash(codex exec *) Bash(agy -p *) Agent(orca-worker)
 ---
 
 # Orca orchestrator
@@ -141,11 +141,40 @@ For finished tasks, Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5 instead 
     | `claude` | `orca-worker` | (none) |
     | `claude:haiku`, `claude:sonnet`, `claude:opus`, `claude:fable` | `orca-worker` | the name after the colon |
     | `claude:<any other id>` | `orca-worker-` plus the id in lower case with every run of characters other than a-z and 0-9 turned into one `-` | (none: the subagent carries its model) |
-    | `codex`, `agy`, with or without a model | don't start it | |
+    | `codex`, `codex:<model>` | Codex worker, below | |
+    | `agy`, `agy:<model>` | Antigravity worker, below | |
 
   - If `.claude/agents/<that subagent name>.md` does not exist, don't start that task. Tell me it is missing
     (I create it outside the agent, and a new subagent only loads when Claude Code is reopened).
-  - A `codex` or `agy` task stays `TODO`. List these tasks for me with their IDs: I run them in that app.
+  - A Codex worker is one Bash call with `run_in_background: true`, in the same message as the Agent calls. It
+    makes the task's worktree and branch, runs Codex there once, and Codex writes its last message (the handover
+    line) to `.tmp/orca/<id>.txt`. `<id>` is the ID in lower case; leave out `-m <model>` for plain `codex`:
+
+    ```
+    mkdir -p .tmp/orca && git worktree add -b orca/<id> .claude/worktrees/<id> <current branch> && codex exec -C .claude/worktrees/<id> -s danger-full-access -m <model> -o .tmp/orca/<id>.txt - <<'EOF' > .tmp/orca/<id>.log 2>&1
+    Read .claude/agents/orca-worker.md and do exactly what it says for this PLAN.md row.
+    <that task's PLAN.md row, the whole line>
+    EOF
+    ```
+
+    `-s danger-full-access` is needed: in Codex's sandbox the worker can't write the repo's `.git` folder (so it
+    can't commit) or the build caches (so Verify fails). It works only inside its own worktree.
+    A task launched again whose folder `.claude/worktrees/<id>` is still in `git worktree list`: drop the
+    `git worktree add ... &&` part, so the worker keeps its changes.
+  - An Antigravity worker (`agy`) is started the same way, with `agy` in print mode. It takes the prompt only as
+    an argument (stdin is ignored), and its last output line is the handover line. Leave out `--model <model>`
+    for plain `agy`:
+
+    ```
+    mkdir -p .tmp/orca && git worktree add -b orca/<id> .claude/worktrees/<id> <current branch> && cd .claude/worktrees/<id> && agy -p "$(cat <<'EOF'
+    Read .claude/agents/orca-worker.md and do exactly what it says for this PLAN.md row.
+    <that task's PLAN.md row, the whole line>
+    EOF
+    )" --model <model> --dangerously-skip-permissions --print-timeout 3600s --settings '{"permissions":{"deny":["command(regex:.*git +(push|reset|checkout|clean|rebase).*)","command(regex:.*rm +-rf.*)","command(regex:.*Remove-Item.*-Recurse.*)"]}}' > ../../../.tmp/orca/<id>.log 2>&1
+    ```
+
+    `--settings` replaces the user's deny list for this run only, without `git commit`, so the worker can commit
+    on its branch; it still can't push, reset or delete folders.
 - Workers run in the background. Tell me which ones started (Orca mode: each has its own tab under this
   workspace in Orca), then end your turn: don't wait or poll.
 
@@ -160,6 +189,10 @@ Orca mode: Orca wakes you with the worker's message, or with a line telling you 
   and tell me; I can look at its tab.
 
 Subagent mode: when a worker finishes, its result ends with a handover line and names its worktree branch.
+A Codex worker's Bash call ends instead: its handover line is in `.tmp/orca/<id>.txt` (if that file is missing,
+read the last 40 lines of `.tmp/orca/<id>.log`) and its branch is `orca/<id>`. Delete both files once the row is
+recorded. An Antigravity worker's handover line is the last line of `.tmp/orca/<id>.log`; its branch is
+`orca/<id>`. Delete the log once the row is recorded.
 
 Both modes:
 - PASS -> Status `DONE`; BLOCKED -> `BLOCKED`; PARTIAL -> `PARTIAL`.

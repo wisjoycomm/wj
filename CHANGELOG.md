@@ -3,6 +3,14 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.15
+- `/orca-orchestrator` runs `codex` and `agy` rows itself, as workers like `claude` rows: in an Orca tab, or without
+  Orca with `codex exec` / `agy -p` in the task's own worktree (branch `orca/<id>`). Only Antigravity in an Orca tab
+  can't commit if your Antigravity settings deny `git commit`.
+- `.claude/models.md` (new projects; an existing one is yours and not overwritten): UI and images go to
+  `codex:cx/gpt-6.2-sol`, security and math to `codex:cx/gpt-6.2-astra`. A Codex task that comes back BLOCKED goes
+  to `claude:opus`.
+
 ## 0.2.14
 - `wj models` moves Opus, Sonnet, Haiku, Fable and the subagent model to the newest Claude the gateway lists, once
   it answers, and says what moved. A default you picked by hand stays. `wj configure` now picks the newest Haiku
