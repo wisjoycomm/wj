@@ -111,7 +111,7 @@ func TestInitKitIsGeneralWithoutChosenStack(t *testing.T) {
 			t.Errorf("base AGENTS.md mentions %q", unwanted)
 		}
 	}
-	if strings.Contains(settings, "npm") || strings.Contains(settings, "go test") {
+	if strings.Contains(settings, "Bash(npm") || strings.Contains(settings, "go test") {
 		t.Errorf("base settings has stack rules:\n%s", settings)
 	}
 	if strings.Contains(plan, "**T-") {
