@@ -117,10 +117,10 @@ own git worktree: an Orca session started with the `orca` CLI, visible in its ow
 the worker verifies, commits on its branch and reports one line; `/orca-orchestrator
 merge T-01` merges and archives on your say. `wj digest` condenses the failures in the
 project's Claude Code transcripts (repeated tool errors, denied commands, handovers
-that were not PASS) and `/orca-dream` turns them into proposed fixes for you to approve.
+that were not PASS); you run it and give the output to `/orca-dream`, which turns it into proposed fixes for you to approve.
 
-The skills and the worker call `wj plan`, `wj verify` and `wj digest`, so the machine
-needs `wj` on PATH; nothing else. `wj verify T-01` lists the changed files, warns about
+The skills and the worker never run `wj`: they do every step by hand, so `wj` is a tool you
+run yourself. `wj verify T-01` lists the changed files, warns about
 files outside the task's Scope, runs the task's Verify command (or detects one:
 Unity EditMode tests, the `package.json` test script, pytest, `go test`) and ends
 with one line: `VERIFY: PASS`, `VERIFY: FAIL (...)` or `VERIFY: NOT_VERIFIED (...)`.

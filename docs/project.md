@@ -37,8 +37,7 @@ Kit có hai lớp, cùng một nguồn (`kit/base` và `kit/orca`):
   `.claude/settings.json` thì đừng giải nén đè: gộp tay, vì zip không biết gộp như `wj init`.
 - Nâng từ lite lên đủ: cài `wj` rồi chạy `wj init`. Tool chỉ thêm phần còn thiếu.
 - Repo cài mức đủ, nhưng một người trong nhóm không có `wj`: hook tự bỏ qua (không báo lỗi, không chặn gì), rule
-  và file cấm đọc vẫn có tác dụng. Skill orchestrator và worker chuyển sang làm tay các bước `wj plan`, `wj verify` (tốn token hơn); riêng
-  `/orca-dream` cần `wj digest` nên báo thiếu rồi dừng.
+  và file cấm đọc vẫn có tác dụng. Skill và worker vốn không gọi `wj` nên chạy như bình thường.
 
 Kit nhắm vào Claude Code. Tool thêm rule chung, rule theo job, `PLAN.md`, `PLAN-ARCHIVE.md` (bảng trống),
 `.claude/settings.json`, `.gitignore`, hai skill (`/orca-orchestrator`, `/orca-dream`) và subagent `orca-worker`.
@@ -47,12 +46,16 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 
 `.claude/settings.json` có năm phần, và tool chỉ thêm, không xoá:
 
-- `allow`: việc chạy không cần hỏi (`wj plan`, `wj verify`, `wj digest`, git chỉ đọc, `git add`, `git commit`,
+- `allow`: việc chạy không cần hỏi (git chỉ đọc, `git add`, `git commit`,
   subagent `orca-worker`, `orca status` và `orca orchestration worker-start` / `check` / `worker-list`, lệnh test của job). `git push` vẫn hỏi.
 - `deny`: file Claude Code không được đọc. Luật "đừng đọc" trong `AGENTS.md` chỉ là lời nhắc; ở đây harness
   chặn hẳn: `PLAN-ARCHIVE.md`, lockfile, `node_modules/`, `.venv/`, `.env`, và `Library/` `Temp/` `Logs/` của Unity
   (tuỳ job), `go.sum` và `vendor/` của Go. Rule viết dạng `Read(**/node_modules/**)` nên đúng cả với thư mục
   nằm sâu trong monorepo. Muốn mở lại một mục thì xoá dòng đó khỏi `deny`.
+  Job `unity` còn cấm `Edit` file `*.unity` và `*.prefab` (scene, prefab chỉ sửa qua Unity MCP).
+- `ask`: hỏi bạn trước khi làm. Job `unity`: đọc `*.unity`, `*.prefab`, `*.asset`, `*.mat` (YAML lớn, chỉ đọc
+  khi cần) và sửa `ProjectSettings/`, `Packages/manifest.json`. Kit chuyển luật sang settings khi harness ép được;
+  `rules.md` của job chỉ giữ điều settings không làm được.
 - `hooks`: `PreToolUse` gọi `wj guard` trước mỗi lượt Read, Bash, PowerShell (xem mục dưới). Project đã có hook
   riêng thì tool thêm hook này bên cạnh, không đụng hook cũ.
 - `env`: `CLAUDE_CODE_GLOB_NO_IGNORE=false` để Glob bỏ qua file gitignore như Grep;
@@ -61,15 +64,30 @@ Chạy lại nhiều lần được: file đã có không bị ghi đè, còn ru
 - `worktree.baseRef: "head"`: worktree của worker bắt đầu từ commit hiện tại của bạn, không phải từ nhánh mặc định
   trên remote. Thiếu dòng này worker không thấy `PLAN.md` vừa commit.
 
-`wj` là phần phụ, không bắt buộc. Skill và worker gọi `wj plan`, `wj verify`; máy không có `wj` (hoặc `wj` cũ hơn số
-ghi trong `.claude/wj-kit`) thì chúng làm tay các bước đó, tốn token hơn. Hook `wj guard` thì tự bỏ qua. Riêng
-`/orca-dream` cần `wj digest`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
+`wj` là tool **bạn** chạy, ngoài agent. Rule, skill và worker dặn agent không bao giờ tự chạy `wj`: chúng làm tay
+mọi bước (Grep `PLAN.md`, tự chạy lệnh Verify, tự ghi archive). Chỉ hook `wj guard` là harness gọi, và nó tự bỏ qua
+khi máy không có `wj`. `wj init` ghi phiên bản `wj` đã cài kit vào `.claude/wj-kit` (commit file này; bản
 lite không có file này); `wj init -update` ghi lại số mới. Project cài bằng
 kit cũ: `wj init -update` thay skill bằng bản mới (bản cũ sao lưu `.bak-<giờ>`), xoá script `.ps1` và skill
 `orca-stateless-worker` cũ. `CLAUDE.md` đã có thì tool không sửa; muốn lấy bản mới thì xoá file rồi chạy lại `wj init`.
 
 Xong thì commit các file này, vì worktree của worker chỉ thấy file đã commit, rồi mở lại Claude Code để nó nhận
 subagent và settings mới.
+
+## Rule chung cho mọi project
+
+Khối `wj:begin base` trong `AGENTS.md` (nguồn: `kit/base/AGENTS.md`) có ngoài phần đọc ít, output nhỏ, file tạm:
+
+- **Replies**: trả lời thẳng vào kết quả, không mở bài, không câu xã giao; câu ngắn, từ đơn giản, giải thích cho
+  người mới hiểu; không bịa (chưa kiểm thì nói chưa kiểm); điều lấy từ file, lệnh, doc, web thì ghi nguồn
+  (`path:line`, lệnh đã chạy, URL).
+- **Reuse, don't repeat**: việc gì làm tới lần thứ hai, hoặc chắc sẽ lặp lại, kể cả việc chỉ một bước, thì agent
+  viết thành script trong `scripts/` (không hỏi gì khi chạy, output ít, có `-h`) và một skill ngắn
+  `.claude/skills/<việc>/SKILL.md` nói khi nào dùng, lệnh nào, đọc output ra sao. Trước khi làm, nó tìm script và
+  skill đã có để sửa, không viết bản thứ hai. Báo cáo cuối nêu script và skill đã thêm hay sửa. Script dùng được
+  cho mọi agent đọc `AGENTS.md`; skill chỉ Claude Code đọc.
+
+Hai mục này chỉ là lời nhắc (tốn khoảng 220 token mỗi phiên), không có gì cưỡng chế.
 
 ## Chặn lượt đọc tốn token: wj guard
 
@@ -117,7 +135,7 @@ Kiểu subagent khó theo dõi (không thấy worker nào đang chạy, đang l�
 /orca-orchestrator merge T-01     gộp nhánh của task vào nhánh hiện tại, xoá worktree, archive
 ```
 
-Mỗi worker nhận đúng một dòng của `PLAN.md`, làm theo `.claude/agents/orca-worker.md` trong worktree riêng, chạy `wj verify`, commit lên nhánh của worktree đó, rồi trả về một dòng
+Mỗi worker nhận đúng một dòng của `PLAN.md`, làm theo `.claude/agents/orca-worker.md` trong worktree riêng, tự chạy lệnh Verify của task, commit lên nhánh của worktree đó, rồi trả về một dòng
 `TASK: ... | STATUS: PASS|PARTIAL|BLOCKED | ...`. Orchestrator ghi kết quả vào `PLAN.md` và in lệnh
 `git diff HEAD...<nhánh>` để bạn xem. Nó không tự merge: phải có lệnh `merge` của bạn.
 
@@ -169,8 +187,8 @@ wj plan worker                  liệt kê worker đã tạo
 ```
 
 Rồi sửa `.claude/models.md`, ví dụ đổi dòng UI thành `claude:cx/gpt-6.1-sol`, commit, và mở lại Claude Code
-(subagent mới chỉ được nạp khi mở phiên). `wj plan` in mục WORKERS cho orchestrator biết task nào chạy bằng
-subagent nào, và báo `MISSING` kèm lệnh cần chạy nếu chưa tạo. Chạy lại `wj plan worker <id>` sau khi
+(subagent mới chỉ được nạp khi mở phiên). Orchestrator tự suy tên subagent từ model id; file
+`.claude/agents/<tên>.md` chưa có thì nó không chạy task đó và báo bạn tạo. Chạy lại `wj plan worker <id>` sau khi
 `orca-worker.md` đổi để bản riêng theo kịp.
 
 Model hãng khác qua Claude Code không được hãng hỗ trợ chính thức: tool hoặc phiên dài có thể lỗi dù bài thử ngắn
@@ -200,14 +218,14 @@ một Unity Editor (bản bạn đang mở) cho mọi việc cần Editor. Proje
 - Commit đúng file của mình: `git add -- <file trong Scope>` rồi `git commit -m "<ID>: ..." -- <các file đó>`,
   không dùng `git add -A`. Gặp lỗi `index.lock` thì chờ vài giây và thử lại, tối đa 3 lần. Không stash, reset,
   checkout hay đổi nhánh.
-- Task script (chỉ `.cs`, `.asmdef`...): sửa file, không mở Unity, không chạy batchmode, rồi chạy `wj verify <ID>`.
+- Task script (chỉ `.cs`, `.asmdef`...): sửa file, không mở Unity, không chạy batchmode, rồi chạy lệnh Verify của task (Verify `-` thì báo BLOCKED `Verify needed`).
 - Task cần Editor (scene, prefab, uGUI, asset, chạy test): chỉ làm qua tool của Unity MCP server đang kết nối,
   không sửa YAML bằng tay. Không có server nào kết nối thì báo BLOCKED `Unity MCP not connected`. Trước khi sửa:
   refresh asset và đọc console; có lỗi biên dịch thì báo BLOCKED kèm tên file và dòng lỗi, không tự sửa file ngoài
   Scope. Sau khi sửa: lưu scene/prefab qua MCP, đọc lại console, chụp Game view nếu server có tool chụp.
 - Dòng handover giữ nguyên dạng `TASK: ... | STATUS: ... | FILES: ... | SUMMARY: ...`.
 
-**`wj verify` ngoài worktree** (thư mục `.git` của checkout trùng với thư mục git chung):
+**`wj verify` ngoài worktree** (khi bạn tự chạy để kiểm lại một task; thư mục `.git` của checkout trùng với thư mục git chung):
 
 - Chỉ xét file thay đổi nằm trong Scope của task. File đổi ngoài Scope và `PLAN.md` đang đổi không còn là lỗi
   hay `WARN`, vì chúng thuộc worker khác và orchestrator. Không có file nào trong Scope thay đổi thì vẫn là
@@ -226,7 +244,7 @@ một Unity Editor (bản bạn đang mở) cho mọi việc cần Editor. Proje
   `git --no-pager show <hash>`.
 - Task cần Editor báo lỗi biên dịch ở một file: thêm một task `P0` sửa file đó (Scope là file đó), rồi chạy lại
   task bị chặn sau khi task sửa xong.
-- `merge` không còn gì để gộp: chỉ archive (`wj plan archive T-01=<hash>`).
+- `merge` không còn gì để gộp: chỉ archive (chuyển dòng sang `PLAN-ARCHIVE.md` kèm hash commit).
 
 ## Memory và dreaming
 
@@ -248,15 +266,20 @@ Memory có ba chỗ. Cả nhóm dùng chung qua git; chỉ `CLAUDE.local.md` là
   `CLAUDE.local.md` của phiên chính, dù file không có trong worktree đó.
 
 Một phiên chỉ thấy chính nó: nó không biết năm phiên khác cũng vấp đúng lỗi đó, và không quay lại xoá ghi chú đã
-sai. `/orca-dream` làm hai việc đó, ngoài phiên làm việc:
+sai. `/orca-dream` làm hai việc đó, ngoài phiên làm việc. Agent không tự chạy `wj digest`: bạn chạy, rồi đưa
+kết quả cho skill:
 
 ```text
-wj digest                  7 ngày của project: lỗi tool lặp lại, bị từ chối, handover không PASS,
-                           chỗ lãng phí context, rồi ghi chú memory và độ dài các mục Lessons
+wj digest > .tmp/dream/digest.txt     7 ngày của project: lỗi tool lặp lại, bị từ chối, handover không PASS,
+                                      chỗ lãng phí context, rồi ghi chú memory và độ dài các mục Lessons
 wj digest -days 14
-wj digest -session 1acf    mọi lỗi của một phiên
-/orca-dream                đọc digest, đề xuất tối đa 5 sửa lỗi + 5 thay đổi memory, kèm chứng cứ
+wj digest -session 1acf               mọi lỗi của một phiên
+/orca-dream .tmp/dream/digest.txt     đọc digest (dán vào chat cũng được), đề xuất tối đa 5 sửa lỗi
+                                      + 5 thay đổi memory, kèm chứng cứ
 ```
+
+Không có digest thì `/orca-dream` trả một dòng nhắc bạn chạy `wj digest` rồi dừng. Khi nhiều phiên cứ làm tay
+cùng một việc nhiều bước, nó đề xuất viết script kèm skill (xem "Rule chung" bên dưới).
 
 **Lỗi lặp lại.** `wj digest` đọc transcript thay cho model (mỗi file nặng nhiều MB) và tính cả subagent lẫn mọi
 worktree của repo. Lệnh chỉ thấy lệnh thoát với mã lỗi: lỗi bị che sau `| tail` hay `|| true` không được đếm.
@@ -291,6 +314,8 @@ dòng nào ở đó cũng tốn token ở mọi phiên. `/orca-dream` không ghi
 wj verify T-01     kiểm tra task T-01 trong worktree đang đứng
 wj verify          không có task: chỉ chạy kiểm tra của project
 ```
+
+Lệnh này cho bạn tự kiểm lại một task. Worker không gọi nó: worker tự chạy lệnh Verify và đọc mã thoát.
 
 Lệnh liệt kê file đã đổi, cảnh báo file ngoài Scope (`WARN out-of-scope:`), rồi chạy lệnh Verify của task.
 Verify là `-` thì tự đoán: Unity EditMode test, script test trong `package.json` (hoặc `tsc --noEmit`), pytest,
@@ -414,8 +439,8 @@ thùng rác XDG (`~/.local/share/Trash`, có file `.trashinfo` để khôi phụ
 thì lệnh dừng và chưa chuyển gì. Không chuyển được (khác ổ đĩa, hết quyền) thì lệnh báo lỗi và để nguyên file: nó
 không bao giờ xoá vĩnh viễn.
 
-- Kit bản đủ dặn agent xoá bằng `wj trash`, không dùng `rm`, và cho phép sẵn `Bash(wj trash *)`.
-- `/orca-dream` xoá ghi chú memory đã duyệt bằng lệnh này; `wj doctor` dọn file tạm cũ cũng bằng nó.
+- Lệnh này cho bạn dùng. Agent không gọi nó: rule dặn agent hỏi bạn trước khi xoá thứ nó không tạo trong task.
+- `wj doctor` dọn file tạm cũ bằng lệnh này.
 - Đã thử trên Windows (2026-11-12): file và thư mục vào Recycle Bin kèm vị trí gốc. Bản macOS và Linux mới được
   kiểm bằng test tự động, chưa thử tay.
 

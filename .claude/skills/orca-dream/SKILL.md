@@ -58,7 +58,7 @@ In this order. A fix the harness enforces beats a sentence a model has to rememb
 2. **The check itself**: a task's Verify command in PLAN.md, a test script, or missing setup (for example a file
    that every new worktree lacks belongs in `.worktreeinclude`).
 3. **A procedure**: a step in `.claude/agents/orca-worker.md` or in a skill. When sessions keep doing the same
-   multi-step job by hand, propose a reusable script (as AGENTS.md "Reuse, don't repeat" says) plus a skill that says when and how to run it.
+   job by hand (even a single step), propose a reusable script (as AGENTS.md "Reuse, don't repeat" says) plus a skill that says when and how to run it.
 4. **A lesson** (a convention or a pitfall of this project): one line under `## Lessons` in `AGENTS.md`. It is
    committed, so the team, every worker and every other coding agent get it, and git keeps its history.
    Write it outside the `wj:begin` / `wj:end` blocks, which my tooling rewrites; add the heading at the end of
