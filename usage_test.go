@@ -355,3 +355,40 @@ func TestCompactTokensUsesBForBillions(t *testing.T) {
 		t.Errorf("compactTokens = %q", got)
 	}
 }
+
+func TestOverlayFeedIncludesCodex(t *testing.T) {
+	s, home := testScanner(t)
+	now := time.Now().UTC()
+	stamp := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339Nano) }
+	writeTestFile(t, filepath.Join(home, ".claude", "projects", "p", "a.jsonl"),
+		claudeLine("a", "/w/claude-proj", stamp(time.Minute), 1000, 10, 0, 0))
+	writeTestFile(t, filepath.Join(home, ".codex", "sessions", "2026", "rollout-a.jsonl"),
+		codexContext("/w/codex-proj", "gpt-x")+codexRecord("t1", "r1", stamp(time.Minute), 1000, 400, 50))
+	s.scan(time.Time{})
+	since := now.Add(-24 * time.Hour)
+	list, _ := s.projectStatus(since)
+	running := runningProjects(list, s.openClaudeProjects(), now)
+	rows := overlayDetailRows(running, list)
+	entries := detailEntries(rows, s.modelsByProject(since), 0)
+	found := false
+	for _, e := range entries {
+		if e.Project == "codex-proj" && strings.Join(e.Apps, "") == "codex" {
+			found = true
+		}
+	}
+	if len(running) != 2 || !found {
+		t.Errorf("running = %+v, entries = %+v", running, entries)
+	}
+}
+
+func TestRunningProjectsKeepsQuietCodex(t *testing.T) {
+	now := time.Now()
+	list := []usageRow{
+		{usageTotal: usageTotal{Project: "codex-quiet"}, Apps: []string{"codex"}, Last: now.Add(-30 * time.Minute)},
+		{usageTotal: usageTotal{Project: "claude-quiet"}, Apps: []string{"claude"}, Last: now.Add(-30 * time.Minute)},
+		{usageTotal: usageTotal{Project: "codex-old"}, Apps: []string{"codex"}, Last: now.Add(-3 * time.Hour)},
+	}
+	if got := runningProjects(list, nil, now); len(got) != 1 || got[0].Project != "codex-quiet" {
+		t.Errorf("running = %+v", got)
+	}
+}
