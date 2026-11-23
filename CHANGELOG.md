@@ -3,6 +3,15 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.16
+- `wj usage` keeps what it read in a store under `~/.wj`: later runs read only what was added to session files, and
+  usage of deleted sessions stays in the reports. The first run after updating still reads every file once.
+- `wj usage prune [--older 30d] [--yes]` deletes old Claude Code and Codex session files that the store already
+  holds, never a running session. Without `--yes` it only lists them. Deleted sessions can no longer be resumed.
+- New projects: `.claude/settings.json` denies reading `.env`, `~/.ssh`, `~/.aws` and other secret files, denies
+  `gh` commands that write to GitHub, and asks before `gh pr create` and `gh pr merge`. `AGENTS.md` gets a short
+  Security section.
+
 ## 0.2.15
 - `/orca-orchestrator` runs `codex` and `agy` rows itself, as workers like `claude` rows: in an Orca tab, or without
   Orca with `codex exec` / `agy -p` in the task's own worktree (branch `orca/<id>`). Only Antigravity in an Orca tab
