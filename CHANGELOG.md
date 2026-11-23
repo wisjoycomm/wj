@@ -3,6 +3,10 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.17
+- The overlay keeps a project that uses Codex for an hour after its last call. Before, it disappeared after 10
+  minutes, because Codex, unlike Claude Code, leaves no sign that a session is still open.
+
 ## 0.2.16
 - `wj usage` keeps what it read in a store under `~/.wj`: later runs read only what was added to session files, and
   usage of deleted sessions stays in the reports. The first run after updating still reads every file once.
