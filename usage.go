@@ -23,9 +23,10 @@ import (
 // commands need no proxy, no network and also see sessions started by Orca.
 
 const (
-	activeWindow   = 2 * time.Minute
-	runningWindow  = 10 * time.Minute
-	overlayMaxRows = 20
+	activeWindow    = 2 * time.Minute
+	runningWindow   = 10 * time.Minute
+	codexOpenWindow = time.Hour // Codex writes no open-session marker, so a quiet session is kept this long
+	overlayMaxRows  = 20
 	// overlayMaxLines also counts the per-model lines of the expanded report.
 	overlayMaxLines = 32
 )
@@ -934,7 +935,8 @@ func runningProjects(list []usageRow, open []string, now time.Time) []usageRow {
 	rows := []usageRow{}
 	seen := []string{}
 	for _, row := range list {
-		if now.Sub(row.Last) < runningWindow || containsName(open, row.Project) {
+		if now.Sub(row.Last) < runningWindow || containsName(open, row.Project) ||
+			now.Sub(row.Last) < codexOpenWindow && containsName(row.Apps, "codex") { // ponytail: Last is per project, not per app; add per-app Last if Claude-only idle rows ever leak in
 			rows = append(rows, row)
 			seen = append(seen, row.Project)
 		}
