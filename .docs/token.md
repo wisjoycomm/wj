@@ -66,6 +66,13 @@ kiểu gõ lệnh từng dòng như trước. Lần mở đầu tiên đọc phi
 chạy `Đang đọc phiên Claude Code, Codex: 42% (310 MB / 740 MB, 6s)`, rồi `đang đọc OpenCode, Antigravity... xong.`
 Mỗi lần bấm phím sau đó khoảng 0.1 giây.
 
+Những gì đã đọc từ file `.jsonl` của Claude Code và Codex được lưu vào `~/.wj/usage-store.gob`: số token, model,
+thời gian, project, tiêu đề phiên và việc của agent phụ, cùng mỗi file đã đọc tới byte nào. Không lưu nội dung
+prompt hay câu trả lời. Lần chạy sau chỉ đọc phần mới ghi thêm vào cuối mỗi file, nên dòng `Đang đọc phiên` chỉ đếm
+phần mới. File phiên bị xoá vẫn giữ số liệu trong store. File bị cắt ngắn hoặc bị thay bằng bản cũ hơn thì đọc lại từ
+đầu và thay số cũ của file đó, không cộng hai lần. Store hỏng hoặc của bản `wj` khác thì bị bỏ qua và ghi lại; xoá
+file này chỉ làm lần sau đọc lại hết. OpenCode và Antigravity vẫn đọc thẳng file SQLite mỗi lần.
+
 Đầu báo cáo có bảng **Các kỳ**: ngày, tuần và tháng chứa kỳ đang xem (đang xem hôm nay thì là hôm nay, tuần này,
 tháng này; lùi về 2026-10-20 thì là ngày đó, tuần W43, tháng 10), với số session, lượt, token và ≈USD; kỳ đang xem
 đánh dấu `▶`. Bảng đi theo bộ lọc `project`/`app` đang chọn. Kỳ gõ tay không phải ngày/tuần/tháng (`7d`, một khoảng
@@ -313,7 +320,8 @@ có giá riêng. Dùng để so sánh project và model với nhau.
 
 ## Giới hạn
 
-- Chỉ tính được khi file phiên còn trên máy.
+- Claude Code, Codex: phiên chỉ tính được nếu `wj usage` đã đọc nó trước khi file bị xoá (xem store ở trên).
+  OpenCode, Antigravity: chỉ tính được khi file còn trên máy.
 - Số liệu của từng máy riêng, không cộng giữa các máy.
 - **Cursor chưa đo được:** Cursor ghi token trên máy chủ của họ chứ không trong file trên máy, nên không có
   mặt trong `wj usage`. Báo cáo chỉ gồm các app ghi trong dòng đầu.

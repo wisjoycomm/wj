@@ -55,6 +55,15 @@ type sessionFile struct {
 	lastTotal  codexTokens
 	tools      []string // Codex: tools called since the last token record
 	lastCtx    int64    // Codex: prompt size of the last call, the size a compaction starts from
+	modTime    time.Time
+}
+
+// replaced is true when the file on disk is not the one read so far: it shrank, or an
+// older copy took its place. It is then read again from the start.
+// ponytail: a replacement that is both larger and newer looks like an append; add a
+// hash of the first bytes if that ever happens.
+func (f *sessionFile) replaced(info fs.FileInfo) bool {
+	return info.Size() < f.offset || info.ModTime().Before(f.modTime)
 }
 
 type sessionScanner struct {
@@ -85,6 +94,13 @@ type sessionScanner struct {
 	// progress, when set, hears how many bytes of session files were read so far.
 	progress     func(done int64)
 	progressDone int64
+	// What was read from the JSONL files is kept in a store (see usage_store.go).
+	storePath   string
+	storeLoaded bool
+	storeDirty  bool
+	storeSaved  time.Time
+	owner       map[string]string // call key -> the session file that recorded it
+	reading     string            // the session file being read now
 }
 
 // agentMeta is what Claude Code writes next to a subagent's transcript.
@@ -108,6 +124,8 @@ func newSessionScanner(home string) *sessionScanner {
 		titles:           map[string]string{},
 		agents:           map[string]agentMeta{},
 		compactions:      map[string]compaction{},
+		storePath:        filepath.Join(stateDir(home), usageStoreName),
+		owner:            map[string]string{},
 	}
 }
 
@@ -120,6 +138,8 @@ func (s *sessionScanner) scan(since time.Time) {
 
 // scanFiles reads the JSONL session files of Claude Code and Codex.
 func (s *sessionScanner) scanFiles(since time.Time) {
+	s.loadStore()
+	defer s.saveStore()
 	for _, dir := range s.claudeDirs {
 		s.scanTree(filepath.Join(dir, "projects"), since, s.readClaudeLine)
 	}
@@ -183,15 +203,9 @@ func (s *sessionScanner) claudeSessionMarkers() []string {
 // pendingBytes is how much the next scan(since) will read from the session files: the
 // total that scanWithProgress counts up to.
 func (s *sessionScanner) pendingBytes(since time.Time) int64 {
+	s.loadStore()
 	var total int64
-	var roots []string
-	for _, dir := range s.claudeDirs {
-		roots = append(roots, filepath.Join(dir, "projects"))
-	}
-	for _, dir := range []string{"sessions", "archived_sessions"} {
-		roots = append(roots, filepath.Join(s.codexDir, dir))
-	}
-	for _, root := range roots {
+	for _, root := range s.fileRoots() {
 		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".jsonl") {
 				return nil
@@ -203,7 +217,7 @@ func (s *sessionScanner) pendingBytes(since time.Time) int64 {
 			state := s.files[path]
 			switch {
 			case state == nil && info.ModTime().Before(since):
-			case state == nil || info.Size() < state.offset:
+			case state == nil || state.replaced(info):
 				total += info.Size()
 			default:
 				total += info.Size() - state.offset
@@ -227,13 +241,19 @@ func (s *sessionScanner) scanTree(root string, since time.Time, parse func(strin
 		if state == nil && info.ModTime().Before(since) {
 			return nil
 		}
-		if state == nil || info.Size() < state.offset {
+		if state != nil && state.replaced(info) {
+			s.dropCallsOf(path)
+			state = nil
+		}
+		if state == nil {
 			state = &sessionFile{}
 			s.files[path] = state
+			s.storeDirty = true
 		}
 		if info.Size() > state.offset {
 			s.readAppended(path, state, parse)
 		}
+		state.modTime = info.ModTime()
 		return nil
 	})
 }
@@ -247,6 +267,8 @@ func (s *sessionScanner) readAppended(path string, state *sessionFile, parse fun
 	if _, err = f.Seek(state.offset, io.SeekStart); err != nil {
 		return
 	}
+	s.reading = path
+	defer func() { s.reading = "" }()
 	// Lines can be many megabytes (pasted images), so no bufio.Scanner.
 	reader := bufio.NewReaderSize(f, 256<<10)
 	for {
@@ -255,6 +277,7 @@ func (s *sessionScanner) readAppended(path string, state *sessionFile, parse fun
 			return // a line still being written is read next time
 		}
 		state.offset += int64(len(line))
+		s.storeDirty = true
 		parse(path, state, line)
 		if s.progress != nil {
 			before := s.progressDone
@@ -267,6 +290,9 @@ func (s *sessionScanner) readAppended(path string, state *sessionFile, parse fun
 }
 
 func (s *sessionScanner) record(key string, call sessionCall) {
+	if s.reading != "" {
+		s.owner[key] = s.reading
+	}
 	if i, ok := s.index[key]; ok {
 		s.calls[i] = call
 		return
