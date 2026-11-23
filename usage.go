@@ -681,6 +681,10 @@ func runUsage(args []string, input io.Reader, out io.Writer) error {
 	agents := flags.Bool("agents", false, "liệt kê từng worker (subagent) dưới session của nó, khi xem theo ngày/tuần/tháng")
 	limit := flags.String("limit", "", "với blocks: giới hạn token của một khối 5 giờ, ví dụ 5M, hoặc max (khối lớn nhất trước đó)")
 	asJSON := flags.Bool("json", false, "in JSON (cho script, status line) thay vì bảng")
+	// `wj usage prune [-older 30d] [-yes]`: delete old session files already in the store.
+	if len(args) > 0 && strings.EqualFold(args[0], "prune") {
+		return runUsagePrune(args[1:], out)
+	}
 	// `wj usage blocks [period]`: 5-hour blocks instead of sessions.
 	blocks := len(args) > 0 && strings.EqualFold(args[0], "blocks")
 	// `wj usage analytics [period]`: where the tokens went and why.
