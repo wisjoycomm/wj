@@ -217,6 +217,8 @@ một project.
   wj usage analytics week phân tích vì sao tốn token: loại token (đọc/ghi cache, ra, suy nghĩ), cỡ ngữ cảnh,
                           tool mỗi lượt gọi, cache hết hạn, nén ngữ cảnh, phiên chính/worker, model, giờ trong ngày,
                           session tốn nhất và vài câu "Vì sao tốn". Kỳ như trên; không ghi kỳ = hôm nay
+  wj usage prune          liệt kê file phiên Claude Code, Codex cũ hơn 30 ngày đã lưu đủ trong store (không xoá);
+                          -older 90d đổi mốc, -yes xoá thật. Bỏ qua phiên đang mở. Phiên đã xoá không resume được nữa
   wj usage week -json     in JSON thay vì bảng (cho script, status line); cũng dùng với blocks, analytics và -since/-by
   wj usage -since 24h     bảng cũ theo project + app, có cột quy đổi USD theo giá API
   wj usage -by project-model   từng model trong mỗi project
