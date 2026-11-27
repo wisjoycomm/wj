@@ -403,7 +403,9 @@ mỗi lần; task mới thêm ở cuối, ID tăng dần, không đánh lại s�
 
 ```text
 wj plan            task sẵn sàng chạy (ưu tiên cao trước), đang chạy, bị chặn
-wj plan check      kiểm tra format, in lỗi kèm số dòng
+wj plan check      kiểm tra format, in lỗi kèm số dòng (cả .claude/plan-prefixes)
+wj plan prefix SON máy này đặt ID task mới SON-01, SON-02... (ghi .claude/plan-prefixes + git config
+                   wj.planPrefix; lỗi nếu prefix thuộc người khác). Không tham số: xem prefix
 wj plan log        20 task đã archive gần nhất (-last 50; -find T-12: một ID hoặc chữ trong Task / Notes)
 wj plan convert    đổi PLAN.md kiểu cũ (checkbox + Backlog) sang bảng, cập nhật skill Orca
                    của project; bản cũ được sao lưu .bak-<giờ>

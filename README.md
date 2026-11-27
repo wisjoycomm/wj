@@ -133,6 +133,7 @@ with one line: `VERIFY: PASS`, `VERIFY: FAIL (...)` or `VERIFY: NOT_VERIFIED (..
 (Pri `P0`-`P3`, SP agile points `1 2 3 5 8 13 ?`, Status `TODO DOING DONE BLOCKED PARTIAL`).
 Agent is `claude`, or `claude:<model>` for a worker that runs on a named model.
 `wj plan` lists ready tasks by priority, `wj plan check` validates the format,
+`wj plan prefix SON` gives this machine its own ID prefix (`SON-01`) so IDs from two branches never clash,
 `wj plan log` queries archived tasks and `wj plan convert` turns an old checkbox plan into the table and refreshes the
 project's Orca skills (the old files are backed up). See [.docs/project.md](.docs/project.md).
 
