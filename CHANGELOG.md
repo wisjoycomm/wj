@@ -3,6 +3,15 @@
 What changed for your projects and for you, newest first, a few lines per version. `wj init` shows the entries
 newer than the kit a project was set up with.
 
+## 0.2.18
+- `wj plan prefix SON` gives this machine its own task ID prefix, so two people planning on two branches no longer
+  hand out the same ID: new tasks are `SON-01`, `SON-02`... It writes `SON <your git name>` to
+  `.claude/plan-prefixes` (commit it) and refuses a prefix someone else holds. `wj plan` shows NEXT ID in your
+  prefix and reminds you when the project has prefixes but this machine has none; `wj plan check` flags duplicates.
+  Old `T-` IDs keep working.
+- Orchestrator and worker files accept IDs like `SON-01`; the orchestrator takes the prefix from
+  `git config --get wj.planPrefix`.
+
 ## 0.2.17
 - The overlay keeps a project that uses Codex for an hour after its last call. Before, it disappeared after 10
   minutes, because Codex, unlike Claude Code, leaves no sign that a session is still open.

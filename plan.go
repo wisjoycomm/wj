@@ -42,6 +42,9 @@ const planHelp = `PLAN.md dạng một bảng duy nhất (cho orchestrator / wor
 
   wj plan              bảng tóm tắt: task sẵn sàng chạy, đang chạy, bị chặn
   wj plan check        kiểm tra đúng format (in lỗi kèm số dòng)
+  wj plan prefix SON   máy này đặt ID task mới là SON-01, SON-02... để không trùng ID
+                       với máy khác; ghi vào .claude/plan-prefixes (commit file đó),
+                       báo lỗi nếu prefix đã thuộc về người khác. Không tham số: xem
   wj plan log          20 task đã archive gần nhất (-last 50: nhiều hơn;
                        -find T-12: một ID, hoặc chữ trong Task / Notes)
   wj plan convert      đổi PLAN.md kiểu cũ (checkbox + Backlog) sang bảng,
@@ -161,7 +164,7 @@ func parsePlan(text string) ([]planTask, []planIssue) {
 			issues = append(issues, planIssue{n, t.ID + ": " + fmt.Sprintf(format, a...)})
 		}
 		if !planIDPattern.MatchString(t.ID) {
-			bad("ID phải dạng T-01")
+			bad("ID phải dạng T-01 hoặc SON-01 (chữ in hoa, -, số)")
 		} else if prev, dup := seen[t.ID]; dup {
 			bad("trùng ID với dòng %d", prev)
 		}
@@ -185,7 +188,7 @@ func parsePlan(text string) ([]planTask, []planIssue) {
 		}
 		for _, d := range t.Depends {
 			if !planIDPattern.MatchString(d) {
-				bad("Depends %q phải là ID (T-01) hoặc -", d)
+				bad("Depends %q phải là ID (T-01, SON-01) hoặc -", d)
 			}
 		}
 		if cells[7] != "-" && len(t.Scope) == 0 {
@@ -448,6 +451,9 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 		}
 		return planLog(out, root, *last, *find)
 	}
+	if sub == "prefix" {
+		return planPrefix(out, root, flags.Args())
+	}
 	if sub == "worker" {
 		return planWorker(out, root, flags.Args(), *dry)
 	}
@@ -466,7 +472,11 @@ func runPlanIn(args []string, out io.Writer, root string) error {
 	case "", "status":
 		return planStatus(out, root, string(data))
 	case "check":
-		return planCheck(out, string(data))
+		prefixErr := planPrefixCheck(out, root)
+		if err := planCheck(out, string(data)); err != nil {
+			return err
+		}
+		return prefixErr
 	case "convert":
 		return planConvert(out, root, string(data), *dry)
 	}
@@ -494,7 +504,7 @@ func planStatus(out io.Writer, root, text string) error {
 	}
 	tasks, issues := parsePlan(text)
 	archive, _ := os.ReadFile(filepath.Join(root, "PLAN-ARCHIVE.md"))
-	fmt.Fprintln(out, "NEXT ID:", nextPlanID(tasks, string(archive)))
+	printNextPlanID(out, root, tasks, string(archive))
 	counts := map[string]int{}
 	for _, t := range tasks {
 		counts[t.Status]++

@@ -14,7 +14,7 @@ You can't see the other workers' changes; they are merged later. Keep the change
 ## 1. Your task
 The prompt has one PLAN.md row:
 `| ID | Task | Pri | SP | Status | Agent | Depends | Scope | Verify | Notes | Session |`.
-Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or no ID like `T-01`, reply
+Note its **ID**, **Task**, **Scope** and **Verify**. If the prompt has no row or no ID like `T-01` or `SON-01`, reply
 `TASK: ? | STATUS: BLOCKED | FILES: - | SUMMARY: no task row given` and stop.
 
 ## 2. Find, then read
