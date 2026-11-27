@@ -52,7 +52,7 @@ Tools read it line by line, so any other text breaks it.
 
 | Column | Allowed values |
 |---|---|
-| ID | `T-01`, `T-02`... Never reuse or renumber an ID. |
+| ID | This machine's prefix plus a number (`SON-01`); the prefix is the output of `git config --get wj.planPrefix`, `T` when it prints nothing. Never reuse or renumber an ID. |
 | Task | Short title, max 120 characters. |
 | Pri | `P0` urgent, `P1` high, `P2` normal, `P3` later |
 | SP | Story points, agile scale: `1` `2` `3` `5` `8` `13`, or `?` not estimated. 8+ means split it. |
@@ -68,9 +68,9 @@ No cell may contain `|` or a line break. Use `-` for an empty cell.
 Backlog work is a normal row with Status `TODO` and Pri `P3`.
 
 ## Reading PLAN.md
-Never read the whole PLAN.md or PLAN-ARCHIVE.md. Get the state by hand: Grep PLAN.md for `^\| T-` with `-n`.
-READY = Status `TODO` whose Depends are all `DONE` or archived, highest Pri first. Next ID = highest ID seen in
-PLAN.md, or in the last line of PLAN-ARCHIVE.md (Grep `^\| T-` with `head_limit` 1 and `-n`, then the tail via
+Never read the whole PLAN.md or PLAN-ARCHIVE.md. Get the state by hand: Grep PLAN.md for `^\| [A-Z]+-` with `-n`.
+READY = Status `TODO` whose Depends are all `DONE` or archived, highest Pri first. Next ID = highest ID with this machine's prefix seen in
+PLAN.md, or in the last line of PLAN-ARCHIVE.md (Grep `^\| [A-Z]+-` with `head_limit` 1 and `-n`, then the tail via
 Read offset), plus one. Check that each row has 11 cells and fix any that don't before anything else.
 
 For finished tasks, Grep PLAN-ARCHIVE.md for the ID with `head_limit` 5 instead of reading it.
